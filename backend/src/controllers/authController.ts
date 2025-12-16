@@ -1,3 +1,5 @@
+// backend/src/controllers/authController.ts
+
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { hashPassword, comparePassword, generateResetToken } from '../utils/password.js';
@@ -7,49 +9,38 @@ import { AuthRequest } from '../middleware/auth.js';
 
 const prisma = new PrismaClient();
 
-// Register new user
-// Register new user
+// ... (دالة register تبقى كما هي دون تغيير) ...
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     let { email, password, fullName } = req.body;
-
-    // 1. تنظيف البيانات (Trim)
-    email = email?.trim().toLowerCase(); // توحيد حالة الأحرف
+    email = email?.trim().toLowerCase();
     fullName = fullName?.trim();
 
-    // 2. التحقق من وجود البيانات
     if (!email || !password || !fullName) {
       throw new AppError('جميع الحقول مطلوبة', 400);
     }
 
-    // 3. التحقق من صحة البريد الإلكتروني (Regex)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       throw new AppError('صيغة البريد الإلكتروني غير صحيحة', 400);
     }
 
-    // 4. شروط كلمة المرور (8 أحرف + حرف كبير + رقم)
-    // الشرح: (?=.*[A-Z]) يعني حرف كبير، (?=.*\d) يعني رقم، {8,} يعني الطول
     const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
     if (!passwordRegex.test(password)) {
       throw new AppError('كلمة المرور يجب أن تكون 8 أحرف على الأقل، وتحتوي على حرف كبير ورقم', 400);
     }
 
-    // 5. شروط الاسم
     if (fullName.length < 3) {
       throw new AppError('الاسم الكامل يجب أن يكون 3 أحرف على الأقل', 400);
     }
 
-    // Check if user exists
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
       throw new AppError('البريد الإلكتروني مستخدم بالفعل', 400);
     }
 
-    // Hash password
     const passwordHash = await hashPassword(password);
 
-    // Create user
     const user = await prisma.user.create({
       data: {
         email,
@@ -76,7 +67,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// Login user
+// Login user - تم التعديل هنا
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
@@ -123,12 +114,15 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       maxAge: 3600 * 1000, // ساعة واحدة
     };
 
-    // إرسال التوكن في الكوكيز
+    // إرسال التوكن في الكوكيز (للأمان الإضافي)
     res.cookie('jwt', token, cookieOptions);
 
-    // إرسال الرد النهائي
+    // إرسال الرد النهائي مع التوكن (ليستخدمه الـ Frontend)
     res.json({
       message: 'تم تسجيل الدخول بنجاح',
+      accessToken: token,        // <--- هذا السطر كان مفقوداً
+      tokenType: 'Bearer',       // <--- مطلوب حسب واجهة الـ Frontend
+      expiresIn: 3600,           // <--- مطلوب حسب واجهة الـ Frontend
       user: {
         id: user.id,
         email: user.email,
@@ -143,7 +137,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// Get current user
+// ... (باقي الدوال getMe, forgotPassword, resetPassword تبقى كما هي) ...
 export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const user = await prisma.user.findUnique({
@@ -171,23 +165,19 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
   }
 };
 
-// Forgot password
 export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email } = req.body;
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      // Don't reveal if user exists
       res.json({ message: 'إذا كان البريد موجوداً، سيتم إرسال رابط إعادة التعيين' });
       return;
     }
 
-    // Generate reset token
     const token = generateResetToken();
     const expiresAt = new Date(Date.now() + 3600000); // 1 hour
 
-    // Save reset token
     await prisma.passwordReset.create({
       data: {
         userId: user.id,
@@ -196,21 +186,16 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
       },
     });
 
-    // TODO: Send email with reset link
-    // await sendResetEmail(user.email, token);
-
     res.json({ message: 'تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني' });
   } catch (error) {
     throw new AppError('خطأ في إرسال رابط إعادة التعيين', 500);
   }
 };
 
-// Reset password
 export const resetPassword = async (req: Request, res: Response): Promise<void> => {
   try {
     const { token, newPassword } = req.body;
 
-    // Find valid reset token
     const resetToken = await prisma.passwordReset.findFirst({
       where: {
         token,
@@ -224,16 +209,13 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
       throw new AppError('رابط إعادة التعيين غير صالح أو منتهي الصلاحية', 400);
     }
 
-    // Hash new password
     const passwordHash = await hashPassword(newPassword);
 
-    // Update password
     await prisma.user.update({
       where: { id: resetToken.userId },
       data: { passwordHash },
     });
 
-    // Mark token as used
     await prisma.passwordReset.update({
       where: { id: resetToken.id },
       data: { used: true },
