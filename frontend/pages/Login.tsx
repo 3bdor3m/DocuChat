@@ -63,8 +63,8 @@ const Login = () => {
         password: formData.password,
       });
       
-      // Redirect to account page
-      navigate("/account");
+      // Redirect to chat page (main interface)
+      navigate("/chat");
     } catch (error: any) {
       console.error("Login error:", error);
       setErrorMessage(error.message || "فشل تسجيل الدخول");

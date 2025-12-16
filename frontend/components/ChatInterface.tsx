@@ -1,17 +1,52 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useChat } from '../context/ChatContext';
 import ChatBackground from './ChatBackground';
 import { CopyButton } from './CopyButton';
 import { MarkdownRenderer } from './MarkdownRenderer';
+import { UploadedFile } from '../types/chat';
 
-const ChatInterface: React.FC = () => {
-  const { messages, isTyping, isLoading, sendMessage, searchMode, toggleSearchMode, stopGenerating, creativityLevel, setCreativityLevel, uploadFile, uploadedFile, clearUploadedFile } = useChat();
+interface ChatInterfaceProps {
+  uploadFile?: (file: File) => Promise<void>;
+  uploadedFile?: UploadedFile | null;
+  uploadProgress?: number;
+  isUploading?: boolean;
+}
+
+const ChatInterface: React.FC<ChatInterfaceProps> = ({
+  uploadFile: propUploadFile,
+  uploadedFile: propUploadedFile,
+  uploadProgress: propUploadProgress,
+  isUploading: propIsUploading,
+}) => {
+  const { 
+    messages, 
+    isTyping, 
+    isLoading, 
+    sendMessage, 
+    searchMode, 
+    toggleSearchMode, 
+    stopGenerating, 
+    creativityLevel, 
+    setCreativityLevel, 
+    uploadFile: contextUploadFile, 
+    uploadedFile: contextUploadedFile, 
+    clearUploadedFile,
+    activeChatId,
+    createNewChat
+  } = useChat();
+
+  // Use props if provided, otherwise use context
+  const uploadFile = propUploadFile || contextUploadFile;
+  const uploadedFile = propUploadedFile !== undefined ? propUploadedFile : contextUploadedFile;
+
   const [input, setInput] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounterRef = useRef(0);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -33,8 +68,13 @@ const ChatInterface: React.FC = () => {
     };
   }, []);
 
-  const handleSend = () => {
+  // Handle send message - now supports general chat without file
+  const handleSend = async () => {
     if (input.trim()) {
+      // If no active chat, create one first
+      if (!activeChatId) {
+        await createNewChat();
+      }
       sendMessage(input);
       setInput('');
       if (textareaRef.current) {
@@ -61,7 +101,6 @@ const ChatInterface: React.FC = () => {
     if (file) {
       try {
         await uploadFile(file);
-        // Reset input to allow uploading the same file again
         if (fileInputRef.current) {
           fileInputRef.current.value = '';
         }
@@ -71,87 +110,227 @@ const ChatInterface: React.FC = () => {
     }
   };
 
+  // Drag and Drop handlers
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCounterRef.current = 0;
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      // Check if file is acceptable
+      const acceptedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'text/plain', 'text/markdown',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'];
+      if (acceptedTypes.includes(file.type) || file.name.endsWith('.md')) {
+        try {
+          await uploadFile(file);
+        } catch (error) {
+          console.error('Error uploading file:', error);
+        }
+      } else {
+        alert('نوع الملف غير مدعوم. يرجى رفع ملف PDF أو صورة أو مستند نصي.');
+      }
+    }
+  }, [uploadFile]);
+
+  // Empty state component
+  const EmptyState = () => (
+    <div className="flex-1 flex items-center justify-center">
+      <div className="text-center max-w-md px-4">
+        {/* Logo/Icon */}
+        <div className="mb-6 flex justify-center">
+          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#2873ec] to-[#1a5bb8] flex items-center justify-center shadow-lg shadow-[#2873ec]/30">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+            </svg>
+          </div>
+        </div>
+
+        <h2 className="text-2xl font-bold text-white mb-3">مرحباً بك في DocuChat</h2>
+        <p className="text-gray-400 mb-8 leading-relaxed">
+          ابدأ محادثة عامة أو ارفع مستنداً للدردشة معه. يمكنني مساعدتك في الإجابة على أسئلتك وتحليل المستندات.
+        </p>
+
+        {/* Quick actions */}
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          <button
+            onClick={() => textareaRef.current?.focus()}
+            className="p-4 bg-gray-900/50 border border-gray-800 rounded-2xl hover:border-[#2873ec]/50 hover:bg-gray-900 transition-all group"
+          >
+            <div className="flex items-center justify-center gap-2 text-gray-400 group-hover:text-white">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              <span className="text-sm font-medium">محادثة عامة</span>
+            </div>
+          </button>
+
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="p-4 bg-gray-900/50 border border-gray-800 rounded-2xl hover:border-[#2873ec]/50 hover:bg-gray-900 transition-all group"
+          >
+            <div className="flex items-center justify-center gap-2 text-gray-400 group-hover:text-white">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              <span className="text-sm font-medium">رفع مستند</span>
+            </div>
+          </button>
+        </div>
+
+        {/* Suggestions */}
+        <div className="space-y-2">
+          <p className="text-xs text-gray-500 mb-3">جرب أن تسأل:</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {['ما هي أفضل الممارسات في...', 'اشرح لي مفهوم...', 'ساعدني في كتابة...'].map((suggestion, idx) => (
+              <button
+                key={idx}
+                onClick={() => {
+                  setInput(suggestion);
+                  textareaRef.current?.focus();
+                }}
+                className="px-3 py-1.5 text-xs text-gray-400 bg-gray-900/30 border border-gray-800 rounded-full hover:border-gray-700 hover:text-gray-300 transition-colors"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="flex-1 flex flex-col h-full bg-black relative">
+    <div 
+      className="flex-1 flex flex-col h-full bg-black relative"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       {/* Animated Background */}
       <ChatBackground />
 
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto px-4 pb-4 pt-16 space-y-6 custom-scrollbar relative z-10">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start w-full'}`}
-          >
-            <div className={`flex max-w-[85%] ${msg.type === 'user' ? 'flex-row-reverse' : 'flex-row'} gap-4`}>
-              {/* Bot Avatar */}
-              {msg.type === 'bot' && (
-                <div className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20 mt-1">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                </div>
-              )}
+      {/* Drag & Drop Overlay */}
+      {isDragging && (
+        <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-[#2873ec]/20 border-2 border-dashed border-[#2873ec] flex items-center justify-center animate-pulse">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-[#2873ec]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+            </div>
+            <p className="text-xl font-semibold text-white mb-2">أفلت الملف هنا</p>
+            <p className="text-gray-400 text-sm">PDF, صور, أو مستندات نصية</p>
+          </div>
+        </div>
+      )}
 
-              <div
-                className={`relative group ${msg.type === 'user'
-                  ? 'bg-[#2873ec] text-white rounded-2xl rounded-tr-sm px-5 py-3 shadow-md'
-                  : 'text-gray-200 px-2 py-1'
-                  }`}
-              >
-                {/* Copy Button */}
-                <div className={`absolute top-2 ${msg.type === 'user' ? 'left-2' : 'left-0'} opacity-0 group-hover:opacity-100 transition-opacity`}>
-                  <CopyButton text={msg.content} />
-                </div>
-
-                {msg.type === 'bot' ? (
-                  <MarkdownRenderer content={msg.content} className="text-sm leading-relaxed" />
-                ) : (
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-                )}
-
-                {/* Sources */}
-                {msg.sources && msg.sources.length > 0 && (
-                  <div className="mt-4 pt-3 border-t border-gray-800">
-                    <div className="flex items-center gap-2 mb-2">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
-                      </svg>
-                      <p className="text-xs text-gray-400 font-medium">المصادر المستخدمة</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {msg.sources.map((source, idx) => (
-                        <span
-                          key={idx}
-                          className="text-xs bg-gray-900/50 text-gray-300 px-3 py-1.5 rounded-lg border border-gray-800 flex items-center space-x-2 hover:border-gray-700 transition-colors cursor-default"
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                          <span>{source.file} (ص {source.page})</span>
-                        </span>
-                      ))}
-                    </div>
+      {/* Messages Area or Empty State */}
+      {messages.length === 0 && !uploadedFile ? (
+        <EmptyState />
+      ) : (
+        <div className="flex-1 overflow-y-auto px-4 pb-4 pt-16 space-y-6 custom-scrollbar relative z-10">
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start w-full'}`}
+            >
+              <div className={`flex max-w-[85%] ${msg.type === 'user' ? 'flex-row-reverse' : 'flex-row'} gap-4`}>
+                {/* Bot Avatar */}
+                {msg.type === 'bot' && (
+                  <div className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20 mt-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
                   </div>
                 )}
 
-                <p className={`text-[10px] mt-2 ${msg.type === 'user' ? 'text-blue-200' : 'text-gray-500'}`}>
-                  {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </p>
+                <div
+                  className={`relative group ${msg.type === 'user'
+                    ? 'bg-[#2873ec] text-white rounded-2xl rounded-tr-sm px-5 py-3 shadow-md'
+                    : 'text-gray-200 px-2 py-1'
+                    }`}
+                >
+                  {/* Copy Button */}
+                  <div className={`absolute top-2 ${msg.type === 'user' ? 'left-2' : 'left-0'} opacity-0 group-hover:opacity-100 transition-opacity`}>
+                    <CopyButton text={msg.content} />
+                  </div>
+
+                  {msg.type === 'bot' ? (
+                    <MarkdownRenderer content={msg.content} className="text-sm leading-relaxed" />
+                  ) : (
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                  )}
+
+                  {/* Sources */}
+                  {msg.sources && msg.sources.length > 0 && (
+                    <div className="mt-4 pt-3 border-t border-gray-800">
+                      <div className="flex items-center gap-2 mb-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                        </svg>
+                        <p className="text-xs text-gray-400 font-medium">المصادر المستخدمة</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {msg.sources.map((source, idx) => (
+                          <span
+                            key={idx}
+                            className="text-xs bg-gray-900/50 text-gray-300 px-3 py-1.5 rounded-lg border border-gray-800 flex items-center space-x-2 hover:border-gray-700 transition-colors cursor-default"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                            <span>{source.file} (ص {source.page})</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <p className={`text-[10px] mt-2 ${msg.type === 'user' ? 'text-blue-200' : 'text-gray-500'}`}>
+                    {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
 
-        {isTyping && (
-          <div className="flex justify-start">
-            <div className="bg-gray-900 border border-[#2873ec]/20 rounded-2xl rounded-br-none px-4 py-3 flex items-center space-x-1 space-x-reverse">
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+          {isTyping && (
+            <div className="flex justify-start">
+              <div className="bg-gray-900 border border-[#2873ec]/20 rounded-2xl rounded-br-none px-4 py-3 flex items-center space-x-1 space-x-reverse">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              </div>
             </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+      )}
 
       {/* Input Area */}
       <div className="p-4 relative z-10">
@@ -316,6 +495,19 @@ const ChatInterface: React.FC = () => {
                   className="hidden"
                 />
 
+                {/* Paperclip/Upload Button */}
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-xl transition-colors"
+                  title="رفع ملف"
+                  disabled={isLoading || isTyping}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                </button>
+
+                {/* Image Upload Button */}
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-xl transition-colors"

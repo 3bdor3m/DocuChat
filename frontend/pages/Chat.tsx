@@ -2,11 +2,10 @@ import React from 'react';
 import { useChat } from '../context/ChatContext';
 import ChatSidebar from '../components/ChatSidebar';
 import ChatInterface from '../components/ChatInterface';
-import FileUpload from '../components/FileUpload';
 import { Link } from 'react-router-dom';
 
 const Chat: React.FC = () => {
-  const { activeChatId } = useChat();
+  const { uploadFile, uploadedFile, uploadProgress, isUploading } = useChat();
 
   return (
     <div className="flex h-screen bg-black overflow-hidden" dir="rtl">
@@ -22,7 +21,13 @@ const Chat: React.FC = () => {
           </svg>
         </Link>
 
-        {activeChatId ? <ChatInterface /> : <FileUpload />}
+        {/* Always render ChatInterface - file upload is now integrated */}
+        <ChatInterface 
+          uploadFile={uploadFile}
+          uploadedFile={uploadedFile}
+          uploadProgress={uploadProgress}
+          isUploading={isUploading}
+        />
       </div>
     </div>
   );

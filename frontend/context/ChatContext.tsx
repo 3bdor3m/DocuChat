@@ -10,6 +10,8 @@ interface ChatContextType {
   isTyping: boolean;
   isLoading: boolean;
   uploadedFile: UploadedFile | null;
+  uploadProgress: number;
+  isUploading: boolean;
   searchMode: boolean;
   creativityLevel: number;
   createNewChat: () => Promise<void>;
@@ -44,6 +46,8 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [searchMode, setSearchMode] = useState(false);
   const [creativityLevel, setCreativityLevel] = useState(50);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Load chats on mount
   useEffect(() => {
@@ -243,10 +247,13 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       status: 'uploading'
     };
     setUploadedFile(tempFile);
+    setIsUploading(true);
+    setUploadProgress(0);
 
     try {
       const uploadedFileData = await fileService.uploadFile(file, (progress) => {
         setUploadedFile(prev => prev ? { ...prev, progress } : null);
+        setUploadProgress(progress);
       });
 
       setUploadedFile({
@@ -263,6 +270,8 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         pollFileStatus(uploadedFileData.id);
       }
 
+      setIsUploading(false);
+
       // Automatically create new chat if none active
       if (!activeChatId) {
         await createNewChat();
@@ -270,6 +279,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (error: any) {
       console.error('Failed to upload file:', error);
       setUploadedFile(prev => prev ? { ...prev, status: 'error' } : null);
+      setIsUploading(false);
       alert(error.message || 'فشل رفع الملف');
     }
   };
@@ -331,6 +341,8 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       isTyping,
       isLoading,
       uploadedFile,
+      uploadProgress,
+      isUploading,
       searchMode,
       creativityLevel,
       createNewChat,

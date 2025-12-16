@@ -125,7 +125,7 @@ const handleSubmit = async (e: React.FormEvent) => {
 
         if (timeLeft <= 0) {
           clearInterval(countdownInterval);
-          navigate('/account');
+          navigate('/chat');
         }
       }, 1000);
       
