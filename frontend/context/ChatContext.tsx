@@ -40,6 +40,7 @@ export const useChat = () => {
 export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
@@ -49,28 +50,30 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Load chats on mount
+  // تحميل قائمة المحادثات عند بدء التشغيل
   useEffect(() => {
     loadChats();
   }, []);
 
-  // Load messages when active chat changes
+  // تحميل تفاصيل المحادثة عند اختيار واحدة
   useEffect(() => {
     if (activeChatId) {
-      loadMessages(activeChatId);
+      loadActiveChatDetails(activeChatId);
+    } else {
+      setMessages([]);
     }
   }, [activeChatId]);
 
-  const messages = activeChatId
-    ? chats.find(c => c.id === activeChatId)?.messages || []
-    : [];
-
+  // دالة لجلب كل المحادثات
   const loadChats = async () => {
     try {
-      const response = await chatService.getChats();
-      const formattedChats: Chat[] = response.items.map(chat => ({
+      const data = await chatService.getChats();
+      // التعامل مع اختلاف هيكلية الرد (مصفوفة أو كائن)
+      const items = Array.isArray(data) ? data : (data.chats || []);
+      
+      const formattedChats: Chat[] = items.map((chat: any) => ({
         id: chat.id,
-        title: chat.title,
+        title: chat.title || 'محادثة جديدة',
         date: new Date(chat.createdAt || new Date()),
         messages: [],
         fileId: chat.fileId,
@@ -81,56 +84,47 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const loadMessages = async (chatId: string) => {
+  // دالة لجلب رسائل المحادثة الحالية
+  const loadActiveChatDetails = async (chatId: string) => {
     try {
-      const response = await chatService.getMessages(chatId);
-      const formattedMessages: Message[] = response.items.map(msg => ({
+      setIsLoading(true);
+      const chatData = await chatService.getChat(chatId);
+      
+      const serverMessages = chatData.messages || [];
+      const formattedMessages: Message[] = serverMessages.map((msg: any) => ({
         id: msg.id,
-        type: msg.messageType === 'user' ? 'user' : 'bot',
-        content: msg.content,
+        type: msg.role === 'user' ? 'user' : 'bot',
+        // ✅ حماية ضد الخطأ: نضمن أن المحتوى نص دائماً وليس undefined
+        content: msg.content || "", 
         timestamp: new Date(msg.createdAt || new Date()),
-        sources: msg.sources?.map(s => ({
-          file: s.file,
-          page: s.page,
-          paragraph: s.paragraph,
-        })),
+        sources: msg.sources,
       }));
 
-      setChats(prev => prev.map(chat => {
-        if (chat.id === chatId) {
-          return { ...chat, messages: formattedMessages };
-        }
-        return chat;
-      }));
+      setMessages(formattedMessages);
     } catch (error) {
-      console.error('Failed to load messages:', error);
+      console.error('Failed to load chat details:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const createNewChat = async () => {
     try {
-      const newChat = await chatService.createChat({
-        title: 'محادثة جديدة',
-        fileId: uploadedFile?.id,
-        settings: {
-          creativity_level: creativityLevel,
-          search_mode: searchMode,
-        },
-      });
-
-      const formattedChat: Chat = {
-        id: newChat.id,
-        title: newChat.title,
-        date: new Date(newChat.createdAt || new Date()),
+      const newChatData = await chatService.createChat(uploadedFile?.id);
+      
+      const newChat: Chat = {
+        id: newChatData.id,
+        title: newChatData.title || 'محادثة جديدة',
+        date: new Date(newChatData.createdAt || new Date()),
         messages: [],
-        fileId: newChat.fileId,
+        fileId: newChatData.fileId,
       };
 
-      setChats(prev => [formattedChat, ...prev]);
-      setActiveChatId(newChat.id);
+      setChats(prev => [newChat, ...prev]);
+      setActiveChatId(newChatData.id);
+      setMessages([]); 
     } catch (error) {
       console.error('Failed to create chat:', error);
-      alert('فشل إنشاء المحادثة');
     }
   };
 
@@ -138,93 +132,63 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setActiveChatId(chatId);
   };
 
+  // الدالة الأساسية لإرسال الرسائل (تم تحصينها بالكامل)
+  // استبدل دالة sendMessage الحالية بهذه النسخة المعدلة
   const sendMessage = async (content: string) => {
     if (!activeChatId) return;
 
+    // 1. إضافة رسالة المستخدم وهمياً
     const userMessage: Message = {
       id: 'temp-' + Date.now().toString(),
       type: 'user',
       content,
       timestamp: new Date()
     };
-
-    // Add user message immediately
-    setChats(prev => prev.map(chat => {
-      if (chat.id === activeChatId) {
-        return { ...chat, messages: [...chat.messages, userMessage] };
-      }
-      return chat;
-    }));
+    setMessages(prev => [...prev, userMessage]);
 
     const controller = new AbortController();
     setAbortController(controller);
-    setIsLoading(true);
+    setIsTyping(true);
 
     try {
-      const response = await chatService.sendMessage(activeChatId, { content });
+      // ✅ التغيير الجوهري هنا:
+      // نرسل رقم الملف (إن وجد) مع الرسالة
+      // هذا هو "الجسر" الذي سيخبر الذكاء الاصطناعي أن يقرأ الملف
+      const currentFileId = uploadedFile?.id; 
 
-      if (controller.signal.aborted) {
-        setIsLoading(false);
-        setAbortController(null);
-        return;
-      }
+      const response = await chatService.sendMessage(activeChatId, content, currentFileId);
 
-      setIsLoading(false);
-      setIsTyping(true);
+      if (controller.signal.aborted) return;
 
-      // Simulate typing delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // استخراج الرد
+      const rawContent = response.botMsg?.content || response.content || response.response;
+      const safeBotContent = typeof rawContent === 'string' ? rawContent : "";
+      const botId = response.botMsg?.id || response.id || 'bot-' + Date.now();
 
-      if (!controller.signal.aborted) {
-        const botMessage: Message = {
-          id: response.botMessage.id,
-          type: 'bot',
-          content: response.botMessage.content,
-          timestamp: new Date(response.botMessage.createdAt || new Date()),
-          sources: response.botMessage.sources?.map(s => ({
-            file: s.file,
-            page: s.page,
-            paragraph: s.paragraph,
-          })),
-        };
-
-        // Replace temp user message with real one and add bot message
-        setChats(prev => prev.map(chat => {
-          if (chat.id === activeChatId) {
-            const updatedMessages = chat.messages.filter(m => m.id !== userMessage.id);
-            const realUserMessage: Message = {
-              id: response.userMessage.id,
-              type: 'user',
-              content: response.userMessage.content,
-              timestamp: new Date(response.userMessage.createdAt || new Date()),
-            };
-            return { ...chat, messages: [...updatedMessages, realUserMessage, botMessage] };
-          }
-          return chat;
-        }));
-        setIsTyping(false);
-        setAbortController(null);
-      }
-    } catch (error: any) {
-      console.error('Failed to send message:', error);
-      setIsLoading(false);
-      setIsTyping(false);
-      setAbortController(null);
-
-      // Add error message
-      const errorMessage: Message = {
-        id: 'error-' + Date.now().toString(),
+      // إضافة رد البوت
+      const botMessage: Message = {
+        id: botId,
         type: 'bot',
-        content: `خطأ: ${error.message || 'فشل إرسال الرسالة'}`,
+        content: safeBotContent,
         timestamp: new Date(),
+        sources: response.botMsg?.sources || []
       };
 
-      setChats(prev => prev.map(chat => {
-        if (chat.id === activeChatId) {
-          return { ...chat, messages: [...chat.messages, errorMessage] };
-        }
-        return chat;
-      }));
+      setMessages(prev => [...prev, botMessage]);
+      loadChats();
+
+    } catch (error: any) {
+      console.error('Failed to send message:', error);
+      const errorMessage: Message = {
+        id: 'error-' + Date.now(),
+        type: 'bot',
+        content: `عذراً، حدث خطأ: ${error.message || 'فشل الاتصال'}`,
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsTyping(false);
+      setAbortController(null);
     }
   };
 
@@ -232,74 +196,62 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (abortController) {
       abortController.abort();
       setIsTyping(false);
-      setIsLoading(false);
       setAbortController(null);
     }
   };
 
   const uploadFile = async (file: File) => {
-    const tempFile: UploadedFile = {
-      id: 'temp-' + Date.now().toString(),
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      progress: 0,
-      status: 'uploading'
-    };
-    setUploadedFile(tempFile);
     setIsUploading(true);
-    setUploadProgress(0);
+    setUploadProgress(10); 
 
     try {
-      const uploadedFileData = await fileService.uploadFile(file, (progress) => {
-        setUploadedFile(prev => prev ? { ...prev, progress } : null);
-        setUploadProgress(progress);
-      });
+      // 1. رفع الملف واستلام البيانات (التي تحتوي على ID)
+      const uploadedData = await fileService.uploadFile(file);
+      setUploadProgress(100);
 
-      setUploadedFile({
-        id: uploadedFileData.id,
-        name: uploadedFileData.originalFilename ?? file.name,
-        size: parseInt(uploadedFileData.fileSize ?? '0'),
-        type: uploadedFileData.fileType ?? '',
+      // التأكد من أن الـ ID موجود فعلاً
+      if (!uploadedData || !uploadedData.id) {
+        throw new Error("لم يتم العثور على معرف الملف في رد السيرفر");
+      }
+
+      const fileId = uploadedData.id; // هذا هو الـ UUID القادم من الباك إند
+
+      // تحديث حالة الملف في الواجهة
+      const newUploadedFile: UploadedFile = {
+        id: fileId,
+        name: uploadedData.filename || file.name,
+        size: file.size,
+        type: file.type,
         progress: 100,
-        status: uploadedFileData.status === 'completed' ? 'completed' : 'processing'
-      });
+        status: 'completed'
+      };
+      setUploadedFile(newUploadedFile);
+      
+      // 2. 🔥 الخطوة الحاسمة: إنشاء محادثة فوراً باستخدام هذا الـ ID
+      // هذا يربط الملف بالمحادثة في قاعدة البيانات
+      const newChatData = await chatService.createChat(fileId);
+      
+      const newChat: Chat = {
+          id: newChatData.id,
+          title: newChatData.title || file.name,
+          date: new Date(),
+          messages: [],
+          fileId: fileId // نحتفظ به في الواجهة أيضاً
+      };
 
-      // Poll for file status if still processing
-      if (uploadedFileData.status === 'processing' && uploadedFileData.id) {
-        pollFileStatus(uploadedFileData.id);
-      }
+      // 3. تفعيل المحادثة الجديدة
+      setChats(prev => [newChat, ...prev]);
+      setActiveChatId(newChatData.id);
+      setMessages([]); // تنظيف الشاشة للملف الجديد
 
-      setIsUploading(false);
-
-      // Automatically create new chat if none active
-      if (!activeChatId) {
-        await createNewChat();
-      }
     } catch (error: any) {
       console.error('Failed to upload file:', error);
-      setUploadedFile(prev => prev ? { ...prev, status: 'error' } : null);
-      setIsUploading(false);
       alert(error.message || 'فشل رفع الملف');
+      setUploadedFile(null);
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
     }
-  };
-
-  const pollFileStatus = async (fileId: string) => {
-    const interval = setInterval(async () => {
-      try {
-        const status = await fileService.getFileStatus(fileId);
-        if (status.status === 'completed') {
-          setUploadedFile(prev => prev ? { ...prev, status: 'completed' } : null);
-          clearInterval(interval);
-        } else if (status.status === 'error') {
-          setUploadedFile(prev => prev ? { ...prev, status: 'error' } : null);
-          clearInterval(interval);
-        }
-      } catch (error) {
-        console.error('Failed to poll file status:', error);
-        clearInterval(interval);
-      }
-    }, 2000); // Poll every 2 seconds
   };
 
   const toggleSearchMode = () => {
@@ -315,22 +267,24 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     } catch (error) {
       console.error('Failed to delete chat:', error);
-      alert('فشل حذف المحادثة');
     }
   };
 
   const renameChat = async (chatId: string, newTitle: string) => {
     try {
-      await chatService.updateChat(chatId, { title: newTitle });
+      // await chatService.updateChat(chatId, { title: newTitle }); // فعلها إذا وفرها الباك إند
       setChats(prev => prev.map(c => c.id === chatId ? { ...c, title: newTitle } : c));
     } catch (error) {
       console.error('Failed to rename chat:', error);
-      alert('فشل تغيير اسم المحادثة');
     }
   };
 
   const clearUploadedFile = () => {
     setUploadedFile(null);
+  };
+
+  const setCreativityLevelHandler = (level: number) => {
+    setCreativityLevel(level);
   };
 
   return (
@@ -353,7 +307,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       deleteChat,
       renameChat,
       stopGenerating,
-      setCreativityLevel,
+      setCreativityLevel: setCreativityLevelHandler,
       loadChats,
       clearUploadedFile
     }}>

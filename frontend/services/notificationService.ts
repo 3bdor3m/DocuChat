@@ -1,5 +1,6 @@
-import { API_ENDPOINTS, getApiUrl, getAuthHeaders } from '../config/api';
+import api from '../config/api';
 
+// تعريف الواجهة كما هي
 export interface Notification {
   id: string;
   userId: string;
@@ -11,7 +12,12 @@ export interface Notification {
   createdAt: string;
 }
 
+// تعريف المسار الأساسي للإشعارات
+const NOTIFICATIONS_URL = '/notifications';
+
 class NotificationService {
+  
+  // 1. جلب الإشعارات
   async getNotifications(page = 1, limit = 20, unreadOnly = false): Promise<{
     items: Notification[];
     total: number;
@@ -19,79 +25,43 @@ class NotificationService {
     limit: number;
     pages: number;
   }> {
-    const url = getApiUrl(
-      `${API_ENDPOINTS.NOTIFICATIONS}?page=${page}&limit=${limit}&unreadOnly=${unreadOnly}`
-    );
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: getAuthHeaders(),
+    // لاحظ كيف نمرر المعاملات بشكل أنظف باستخدام params
+    const response = await api.get(NOTIFICATIONS_URL, {
+      params: {
+        page,
+        limit,
+        unreadOnly
+      }
     });
 
-    if (!response.ok) {
-      throw new Error('فشل جلب الإشعارات');
-    }
-
-    return response.json();
+    return response.data;
   }
 
+  // 2. جلب عدد غير المقروء
   async getUnreadCount(): Promise<{ count: number }> {
-    const response = await fetch(getApiUrl(`${API_ENDPOINTS.NOTIFICATIONS}/unread-count`), {
-      method: 'GET',
-      headers: getAuthHeaders(),
-    });
-
-    if (!response.ok) {
-      throw new Error('فشل جلب عدد الإشعارات');
-    }
-
-    return response.json();
+    const response = await api.get(`${NOTIFICATIONS_URL}/unread-count`);
+    return response.data;
   }
 
+  // 3. تحديد إشعار كمقروء
   async markAsRead(id: string): Promise<Notification> {
-    const response = await fetch(getApiUrl(`${API_ENDPOINTS.NOTIFICATIONS}/${id}/read`), {
-      method: 'PUT',
-      headers: getAuthHeaders(),
-    });
-
-    if (!response.ok) {
-      throw new Error('فشل تحديث الإشعار');
-    }
-
-    return response.json();
+    const response = await api.put(`${NOTIFICATIONS_URL}/${id}/read`);
+    return response.data;
   }
 
+  // 4. تحديد الكل كمقروء
   async markAllAsRead(): Promise<void> {
-    const response = await fetch(getApiUrl(`${API_ENDPOINTS.NOTIFICATIONS}/read-all`), {
-      method: 'PUT',
-      headers: getAuthHeaders(),
-    });
-
-    if (!response.ok) {
-      throw new Error('فشل تحديث الإشعارات');
-    }
+    await api.put(`${NOTIFICATIONS_URL}/read-all`);
   }
 
+  // 5. حذف إشعار واحد
   async deleteNotification(id: string): Promise<void> {
-    const response = await fetch(getApiUrl(`${API_ENDPOINTS.NOTIFICATIONS}/${id}`), {
-      method: 'DELETE',
-      headers: getAuthHeaders(),
-    });
-
-    if (!response.ok) {
-      throw new Error('فشل حذف الإشعار');
-    }
+    await api.delete(`${NOTIFICATIONS_URL}/${id}`);
   }
 
+  // 6. حذف جميع الإشعارات المقروءة
   async deleteAllRead(): Promise<void> {
-    const response = await fetch(getApiUrl(`${API_ENDPOINTS.NOTIFICATIONS}/read`), {
-      method: 'DELETE',
-      headers: getAuthHeaders(),
-    });
-
-    if (!response.ok) {
-      throw new Error('فشل حذف الإشعارات');
-    }
+    await api.delete(`${NOTIFICATIONS_URL}/read`);
   }
 }
 

@@ -1,48 +1,32 @@
 import axios from 'axios';
 
-// رابط الـ Backend
+// 1. رابط الباك إند
 export const API_URL = 'http://localhost:8000/api/v1';
 
+// 2. قائمة الروابط (نحتفظ بها للتنظيم فقط، وليس كترقيع)
 export const API_ENDPOINTS = {
-  CHATS: '/chats',
-  CHAT_BY_ID: (chatId: string) => `/chats/${chatId}`,
-  MESSAGES: (chatId: string) => `/chats/${chatId}/messages`,
-  UPLOAD_FILE: '/files/upload',
+  LOGIN: '/auth/login',
+  REGISTER: '/auth/register',
+  LOGOUT: '/auth/logout',
+  REFRESH: '/auth/refresh',
+  USER: '/users/me',
+  CHANGE_PASSWORD: '/users/password',
   FILES: '/files',
-  FILE_BY_ID: (fileId: string) => `/files/${fileId}`,
-  FILE_STATUS: (fileId: string) => `/files/${fileId}/status`,
-  NOTIFICATIONS: '/notifications',
-  ACTIVATE_CODE: '/activation/activate',
+  UPLOAD: '/files/upload',
+  CHAT: '/chats',
 };
 
-export const getApiUrl = (endpoint: string) => `${API_URL}${endpoint}`;
-
-export const getAuthHeaders = () => {
-  const token = localStorage.getItem('token');
-  return {
-    'Content-Type': 'application/json',
-    Authorization: token ? `Bearer ${token}` : '',
-  };
-};
-
-export const getAuthHeadersForUpload = () => {
-  const token = localStorage.getItem('token');
-  return {
-    Authorization: token ? `Bearer ${token}` : '',
-  };
-};
-
-// إنشاء نسخة من Axios بإعداداتنا الخاصة
+// 3. إعداد Axios (المحرك الرئيسي)
 const api = axios.create({
   baseURL: API_URL,
-  withCredentials: true, // ضروري جداً لكي تعمل الكوكيز (Cookies)
+  withCredentials: true, // للسماح بالكوكيز
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// اعتراض الطلب (Request Interceptor)
-// لإضافة التوكن تلقائياً إذا كان محفوظاً في LocalStorage
+// 4. Request Interceptor (إرسال التوكن تلقائياً)
+// هذا يغنينا عن دالة getAuthHeaders
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -51,21 +35,18 @@ api.interceptors.request.use(
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// اعتراض الرد (Response Interceptor)
-// لمعالجة انتهاء الجلسة أو الأخطاء العامة
+// 5. Response Interceptor (معالجة انتهاء الجلسة)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // إذا انتهت الجلسة (401)، نظف المتصفح
     if (error.response && error.response.status === 401) {
-      // إذا انتهت صلاحية الجلسة، احذف التوكن وحول المستخدم للدخول
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      // window.location.href = '/login'; // (اختياري: التوجيه التلقائي)
+      // window.location.href = '/login'; // فعلها لاحقاً للتوجيه التلقائي
     }
     return Promise.reject(error);
   }

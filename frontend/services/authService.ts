@@ -1,6 +1,6 @@
 import api from '../config/api';
 
-// تعريف أنواع البيانات (مطابق لما عملناه في الباك إند)
+// --- الأنواع (Interfaces) المطلوبة للصفحات القديمة ---
 export interface LoginCredentials {
   email: string;
   password: string;
@@ -21,48 +21,43 @@ export interface User {
 
 export interface AuthResponse {
   status: string;
-  token?: string; // التوكن قد يأتي في الرد أو الكوكيز
+  token?: string;
   data: {
     user: User;
   };
 }
+// -----------------------------------------------------
 
 export const authService = {
   // تسجيل الدخول
   login: async (credentials: LoginCredentials) => {
-    const response = await api.post<AuthResponse>('/auth/login', credentials);
-    
-    // حفظ التوكن وبيانات المستخدم عند النجاح
+    const response = await api.post('/auth/login', credentials);
     if (response.data.token) {
       localStorage.setItem('token', response.data.token);
     }
     localStorage.setItem('user', JSON.stringify(response.data.data.user));
-    
     return response.data;
   },
 
-  // إنشاء حساب جديد
+  // إنشاء حساب
   register: async (credentials: RegisterCredentials) => {
-    const response = await api.post<AuthResponse>('/auth/register', credentials);
+    const response = await api.post('/auth/register', credentials);
     return response.data;
   },
 
-  // تسجيل الخروج
+  // الخروج
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    // يمكن استدعاء API خروج في الباك إند إذا أردت مسح الكوكيز أيضاً
-    // api.post('/auth/logout'); 
   },
 
-  // الحصول على المستخدم الحالي من التخزين المحلي
+  // جلب المستخدم الحالي
   getCurrentUser: (): User | null => {
     const userStr = localStorage.getItem('user');
-    if (userStr) return JSON.parse(userStr);
-    return null;
+    return userStr ? JSON.parse(userStr) : null;
   },
 
-  // التحقق هل المستخدم مسجل دخول
+  // التحقق من الدخول
   isAuthenticated: (): boolean => {
     return !!localStorage.getItem('token');
   }
