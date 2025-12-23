@@ -2,7 +2,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import app from './app.js';
 import { config } from './config/index.js';
-import { verifyToken } from './utils/jwt.js';
+import { verifyToken } from './common/utils/jwt.js';
 
 const PORT = config.port;
 
@@ -20,7 +20,7 @@ const io = new Server(httpServer, {
 // Socket.IO authentication middleware
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
-  
+
   if (!token) {
     return next(new Error('Authentication error'));
   }

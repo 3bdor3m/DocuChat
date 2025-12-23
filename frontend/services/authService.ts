@@ -1,14 +1,13 @@
-import { API_ENDPOINTS, getApiUrl, getAuthHeaders } from '../config/api';
+import api from '../config/api';
 
-export interface RegisterData {
+// تعريف أنواع البيانات (مطابق لما عملناه في الباك إند)
+export interface LoginCredentials {
   email: string;
   password: string;
-  fullName: string;
-  firstName: string;
-  lastName: string;
 }
 
-export interface LoginData {
+export interface RegisterCredentials {
+  fullName: string;
   email: string;
   password: string;
 }
@@ -17,88 +16,54 @@ export interface User {
   id: string;
   email: string;
   fullName: string;
-  isActive: boolean;
   subscriptionTier: string;
-  createdAt: string;
-  profileImage?: string;
-  filesCount?: number;
 }
 
-export interface LoginResponse {
-  accessToken: string;
-  tokenType: string;
-  expiresIn: number;
-  user: User;
+export interface AuthResponse {
+  status: string;
+  token?: string; // التوكن قد يأتي في الرد أو الكوكيز
+  data: {
+    user: User;
+  };
 }
 
-class AuthService {
-  async register(data: RegisterData): Promise<User> {
-    const response = await fetch(getApiUrl(API_ENDPOINTS.REGISTER), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'فشل التسجيل');
+export const authService = {
+  // تسجيل الدخول
+  login: async (credentials: LoginCredentials) => {
+    const response = await api.post<AuthResponse>('/auth/login', credentials);
+    
+    // حفظ التوكن وبيانات المستخدم عند النجاح
+    if (response.data.token) {
+      localStorage.setItem('token', response.data.token);
     }
+    localStorage.setItem('user', JSON.stringify(response.data.data.user));
+    
+    return response.data;
+  },
 
-    return response.json();
-  }
+  // إنشاء حساب جديد
+  register: async (credentials: RegisterCredentials) => {
+    const response = await api.post<AuthResponse>('/auth/register', credentials);
+    return response.data;
+  },
 
-  async login(data: LoginData): Promise<LoginResponse> {
-    const response = await fetch(getApiUrl(API_ENDPOINTS.LOGIN), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'فشل تسجيل الدخول');
-    }
-
-    const result: LoginResponse = await response.json();
-
-    // Save token to localStorage
-    localStorage.setItem('accessToken', result.accessToken);
-    localStorage.setItem('user', JSON.stringify(result.user));
-
-    return result;
-  }
-
-  async getMe(): Promise<User> {
-    const response = await fetch(getApiUrl(API_ENDPOINTS.ME), {
-      method: 'GET',
-      headers: getAuthHeaders(),
-    });
-
-    if (!response.ok) {
-      throw new Error('فشل جلب بيانات المستخدم');
-    }
-
-    return response.json();
-  }
-
-  logout(): void {
-    localStorage.removeItem('accessToken');
+  // تسجيل الخروج
+  logout: () => {
+    localStorage.removeItem('token');
     localStorage.removeItem('user');
-  }
+    // يمكن استدعاء API خروج في الباك إند إذا أردت مسح الكوكيز أيضاً
+    // api.post('/auth/logout'); 
+  },
 
-  getCurrentUser(): User | null {
+  // الحصول على المستخدم الحالي من التخزين المحلي
+  getCurrentUser: (): User | null => {
     const userStr = localStorage.getItem('user');
-    if (!userStr) return null;
-    try {
-      return JSON.parse(userStr);
-    } catch {
-      return null;
-    }
-  }
+    if (userStr) return JSON.parse(userStr);
+    return null;
+  },
 
-  isAuthenticated(): boolean {
-    return !!localStorage.getItem('accessToken');
+  // التحقق هل المستخدم مسجل دخول
+  isAuthenticated: (): boolean => {
+    return !!localStorage.getItem('token');
   }
-}
-
-export const authService = new AuthService();
+};

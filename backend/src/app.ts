@@ -6,7 +6,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { config } from './config/index.js';
 import routes from './routes/index.js';
-import { errorHandler } from './middleware/errorHandler.js';
+import { globalErrorHandler } from './common/middleware/errorHandler.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -63,6 +63,6 @@ app.use((req, res) => {
 });
 
 // Error handler (must be last)
-app.use(errorHandler);
+app.use(globalErrorHandler);
 
 export default app;

@@ -2,8 +2,8 @@
 
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { hashPassword, comparePassword, generateResetToken } from '../utils/password.js';
-import { generateToken } from '../utils/jwt.js';
+import { hashPassword, comparePassword, generateResetToken } from '../common/utils/password.js';
+import { generateToken } from '../common/utils/jwt.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { AuthRequest } from '../middleware/auth.js';
 

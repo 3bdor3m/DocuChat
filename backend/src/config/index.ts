@@ -24,7 +24,7 @@ export const config = {
   
   // File Upload
   maxFileSizeMB: parseInt(process.env.MAX_FILE_SIZE_MB || '50', 10),
-  uploadDir: process.env.UPLOAD_DIR || './uploads',
+  uploadDir: process.env.UPLOAD_DIR || './uploadDir',
   allowedFileTypes: (process.env.ALLOWED_FILE_TYPES || '.pdf,.docx,.doc,.txt,.md').split(','),
   
   // Redis

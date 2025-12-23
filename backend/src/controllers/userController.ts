@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { hashPassword, comparePassword } from '../utils/password.js';
+import { hashPassword, comparePassword } from '../common/utils/password.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { AuthRequest } from '../middleware/auth.js';
 

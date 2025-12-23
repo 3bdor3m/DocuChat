@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client';
-import { API_CONFIG } from '../config/api';
+import { API_URL } from '../config/api';
 
 class SocketService {
   private socket: Socket | null = null;
@@ -11,7 +11,7 @@ class SocketService {
     }
 
     // Extract base URL without /api/v1
-    const baseUrl = API_CONFIG.BASE_URL.replace('/api/v1', '');
+    const baseUrl = API_URL.replace('/api/v1', '');
 
     this.socket = io(baseUrl, {
       auth: {

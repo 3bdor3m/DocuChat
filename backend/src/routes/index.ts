@@ -1,11 +1,10 @@
 import { Router } from 'express';
-import authRoutes from './authRoutes.js';
-import fileRoutes from './fileRoutes.js';
-import chatRoutes from './chatRoutes.js';
-import messageRoutes from './messageRoutes.js';
+import authRoutes from '../modules/auth/auth.routes.js';
+import fileRoutes from '../modules/files/files.routes.js';
+import chatRoutes from '../modules/chat/chat.routes.js';
 import notificationRoutes from './notificationRoutes.js';
 import activationCodeRoutes from './activationCodeRoutes.js';
-import userRoutes from './userRoutes.js';
+import userRoutes from '../modules/users/users.routes.js';
 
 const router = Router();
 
@@ -18,7 +17,6 @@ router.get('/health', (req, res) => {
 router.use('/auth', authRoutes);
 router.use('/files', fileRoutes);
 router.use('/chats', chatRoutes);
-router.use('/chats', messageRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/activation-codes', activationCodeRoutes);
 router.use('/users', userRoutes);

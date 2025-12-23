@@ -22,7 +22,7 @@ class NotificationService {
     const url = getApiUrl(
       `${API_ENDPOINTS.NOTIFICATIONS}?page=${page}&limit=${limit}&unreadOnly=${unreadOnly}`
     );
-    
+
     const response = await fetch(url, {
       method: 'GET',
       headers: getAuthHeaders(),
