@@ -132,12 +132,11 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setActiveChatId(chatId);
   };
 
-  // الدالة الأساسية لإرسال الرسائل (تم تحصينها بالكامل)
-  // استبدل دالة sendMessage الحالية بهذه النسخة المعدلة
+// دالة الإرسال (النسخة النظيفة والمبسطة)
   const sendMessage = async (content: string) => {
     if (!activeChatId) return;
 
-    // 1. إضافة رسالة المستخدم وهمياً
+    // 1. عرض رسالة المستخدم
     const userMessage: Message = {
       id: 'temp-' + Date.now().toString(),
       type: 'user',
@@ -151,12 +150,9 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsTyping(true);
 
     try {
-      // ✅ التغيير الجوهري هنا:
-      // نرسل رقم الملف (إن وجد) مع الرسالة
-      // هذا هو "الجسر" الذي سيخبر الذكاء الاصطناعي أن يقرأ الملف
-      const currentFileId = uploadedFile?.id; 
-
-      const response = await chatService.sendMessage(activeChatId, content, currentFileId);
+      // ✅ التعديل هنا: نرسل المحتوى فقط
+      // لم نعد بحاجة لحساب targetFileId وإرساله
+      const response = await chatService.sendMessage(activeChatId, content);
 
       if (controller.signal.aborted) return;
 
@@ -165,7 +161,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const safeBotContent = typeof rawContent === 'string' ? rawContent : "";
       const botId = response.botMsg?.id || response.id || 'bot-' + Date.now();
 
-      // إضافة رد البوت
+      // عرض رد البوت
       const botMessage: Message = {
         id: botId,
         type: 'bot',
