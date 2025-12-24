@@ -10,30 +10,41 @@ const fileManager = new GoogleAIFileManager(config.geminiApiKey);
 
 export class FileService {
   
-  // 1. عملية الرفع الأولية (حفظ في DB وبدء المعالجة)
+  // 1. عملية الرفع (أصبحت الآن تنتظر جوجل)
   async uploadFile(userId: string, file: Express.Multer.File) {
-    // إنشاء سجل في قاعدة البيانات
+    // أ) حفظ السجل في قاعدة البيانات
     const fileRecord = await prisma.file.create({
       data: {
         userId,
-        filename: file.filename, // الاسم على السيرفر
-        originalFilename: file.originalname, // الاسم الأصلي
+        filename: file.filename,
+        originalFilename: file.originalname,
         fileType: path.extname(file.originalname).toLowerCase(),
         fileSize: BigInt(file.size),
         storagePath: file.path,
-        status: 'processing', // الحالة المبدئية
+        status: 'processing',
       },
     });
 
-    // بدء عملية الرفع لـ Gemini في الخلفية (بدون انتظار)
-    this.processFileWithGemini(fileRecord.id).catch(err => {
-      console.error(`Background processing failed for file ${fileRecord.id}:`, err);
-    });
+    // ب) الانتظار حتى تنتهي معالجة Gemini
+    // لن نستخدم .catch هنا لأننا نريد انتظار النتيجة
+    await this.processFileWithGemini(fileRecord.id);
 
-    return fileRecord;
+    // ج) جلب الحالة النهائية للملف
+    const finalRecord = await prisma.file.findUnique({ where: { id: fileRecord.id } });
+
+    // د) إذا فشلت المعالجة، نرمي خطأ لكي يظهر في الفرونت إند ولا يعطي "مكتمل"
+    if (!finalRecord || finalRecord.status === 'error') {
+      throw new AppError(
+        `فشل معالجة الملف من قبل جوجل: ${finalRecord?.errorMessage || 'خطأ غير معروف'}`, 
+        400
+      );
+    }
+
+    // هـ) إذا نجح، نعيد الملف المحدث (الذي حالته completed)
+    return finalRecord;
   }
 
-  // 2. العملية الخلفية (Gemini Upload) - هذه الدالة تعمل في الخلفية
+  // 2. معالجة Gemini (كما هي، لكن استدعاؤها تغير)
   private async processFileWithGemini(fileId: string) {
     const fileRecord = await prisma.file.findUnique({ where: { id: fileId } });
     if (!fileRecord) return;
@@ -41,10 +52,8 @@ export class FileService {
     try {
       console.log(`🚀 Starting Gemini upload for: ${fileRecord.originalFilename}`);
 
-      // تحديد نوع MIME
       const mimeType = this.getMimeType(fileRecord.fileType);
 
-      // الرفع لـ Gemini
       const uploadResult = await fileManager.uploadFile(fileRecord.storagePath, {
         mimeType,
         displayName: fileRecord.originalFilename,
@@ -53,17 +62,17 @@ export class FileService {
       let geminiFile = uploadResult.file;
       console.log(`✅ Uploaded to Gemini, waiting for processing...`);
 
-      // انتظار المعالجة من طرف Google
+      // حلقة الانتظار (Polling) من جوجل
       while (geminiFile.state === FileState.PROCESSING) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
         geminiFile = await fileManager.getFile(geminiFile.name);
       }
 
       if (geminiFile.state === FileState.FAILED) {
-        throw new Error('Gemini processing failed');
+        throw new Error('Google Gemini marked the file as FAILED');
       }
 
-      // تحديث الحالة عند النجاح
+      // تحديث الحالة للنجاح
       await prisma.file.update({
         where: { id: fileId },
         data: {
@@ -79,6 +88,7 @@ export class FileService {
 
     } catch (error: any) {
       console.error(`❌ Error processing file ${fileId}:`, error);
+      // تسجيل الخطأ في قاعدة البيانات
       await prisma.file.update({
         where: { id: fileId },
         data: { 
@@ -86,6 +96,8 @@ export class FileService {
           errorMessage: error.message 
         },
       });
+      // ملاحظة: لا نرمي الخطأ هنا حتى لا نوقف السيرفر، بل نكتفي بتحديث الحالة
+      // ودالة uploadFile هي التي ستفحص الحالة وترمي الخطأ للمستخدم
     }
   }
 
@@ -114,27 +126,21 @@ export class FileService {
     const file = await prisma.file.findFirst({ where: { id: fileId, userId } });
     if (!file) throw new AppError('الملف غير موجود', 404);
 
-    // الحذف من Gemini
     if (file.metadata && (file.metadata as any).geminiFileName) {
       try {
         await fileManager.deleteFile((file.metadata as any).geminiFileName);
       } catch (e) {
-        console.warn('Could not delete from Gemini (might be already deleted)');
+        console.warn('Could not delete from Gemini');
       }
     }
 
-    // الحذف من السيرفر المحلي
     try {
       await fs.unlink(file.storagePath);
-    } catch (e) {
-      console.warn('Could not delete local file');
-    }
+    } catch (e) { console.warn('Local file missing'); }
 
-    // الحذف من قاعدة البيانات
     await prisma.file.delete({ where: { id: fileId } });
   }
 
-  // Helper
   private getMimeType(ext: string): string {
     const map: Record<string, string> = {
       '.pdf': 'application/pdf',

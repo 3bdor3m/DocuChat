@@ -23,7 +23,7 @@ export class ChatService {
       where: { userId },
       orderBy: { updatedAt: 'desc' },
       include: { 
-        file: { select: { originalFilename: true } } // لإظهار اسم الملف المرتبط
+        file: { select: { originalFilename: true } } // هنا نحن نختار الاسم فقط، لذا لا توجد مشكلة BigInt
       }
     });
   }
@@ -34,19 +34,32 @@ export class ChatService {
       where: { id: chatId, userId },
       include: { 
         messages: { orderBy: { createdAt: 'asc' } },
-        file: true 
+        file: true // هنا المشكلة! هذا يجلب fileSize وهو BigInt
       },
     });
+
     if (!chat) throw new AppError('المحادثة غير موجودة', 404);
+
+    // 🔥 الحل: تحويل BigInt إلى Number قبل الإرسال
+    if (chat.file) {
+      return {
+        ...chat,
+        file: {
+          ...chat.file,
+          fileSize: Number(chat.file.fileSize) // التحويل هنا
+        }
+      };
+    }
+
     return chat;
   }
 
-  // إرسال رسالة (الأهم!)
+  // إرسال رسالة
   async sendMessage(chatId: string, userId: string, content: string) {
     // 1. التحقق من وجود المحادثة
     const chat = await prisma.chat.findFirst({
       where: { id: chatId, userId },
-      include: { messages: true }, // نحتاج التاريخ للسياق
+      include: { messages: true, file: true }, // نحتاج الملف أيضاً هنا لتمريره
     });
 
     if (!chat) throw new AppError('المحادثة غير موجودة', 404);
@@ -70,9 +83,10 @@ export class ChatService {
     }
 
     // 4. إرسال للذكاء الاصطناعي والحصول على الرد
+    // نمرر fileId الموجود في المحادثة (الباك إند هو سيد الموقف الآن)
     const aiResponse = await aiService.generateResponse({
       chatId,
-      fileId: chat.fileId,
+      fileId: chat.fileId, 
       userMessage: content,
       chatHistory: chat.messages,
     });

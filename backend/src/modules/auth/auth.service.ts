@@ -22,12 +22,14 @@ export class AuthService {
     // 2. تشفير كلمة المرور
     const passwordHash = await hashPassword(data.password);
 
+    const fullName = `${data.firstName} ${data.lastName}`;
+
     // 3. إنشاء المستخدم
     const user = await prisma.user.create({
       data: {
         email: data.email,
         passwordHash,
-        fullName: data.fullName,
+        fullName: fullName,
         firstName: data.firstName,
         lastName: data.lastName,
       },

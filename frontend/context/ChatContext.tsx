@@ -85,39 +85,67 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   // دالة لجلب رسائل المحادثة الحالية
+// دالة لجلب تفاصيل المحادثة عند اختيارها
   const loadActiveChatDetails = async (chatId: string) => {
     try {
       setIsLoading(true);
+      // 1. تنظيف أي ملف سابق معلق
+      setUploadedFile(null); 
+
+      // 2. جلب بيانات المحادثة من السيرفر
       const chatData = await chatService.getChat(chatId);
       
+      // 3. معالجة الرسائل
       const serverMessages = chatData.messages || [];
       const formattedMessages: Message[] = serverMessages.map((msg: any) => ({
         id: msg.id,
-        type: msg.role === 'user' ? 'user' : 'bot',
-        // ✅ حماية ضد الخطأ: نضمن أن المحتوى نص دائماً وليس undefined
+        type: msg.role === 'user' ? 'user' : 'bot', // تأكد من توافق التسمية مع الباك إند
         content: msg.content || "", 
         timestamp: new Date(msg.createdAt || new Date()),
         sources: msg.sources,
       }));
-
       setMessages(formattedMessages);
+
+      // 4. 🔥 الخطوة الجديدة: استرجاع الملف إذا وجد
+      // نفحص الكائن `file` القادم من الباك إند
+      if (chatData.file) {
+        const recoveredFile: UploadedFile = {
+          id: chatData.file.id,
+          name: chatData.file.originalFilename || chatData.file.filename || 'ملف مرفق',
+          size: Number(chatData.file.fileSize || 0), // تحويل من BigInt إن لزم
+          type: chatData.file.fileType || 'application/pdf',
+          progress: 100, // لأنه مرفوع سابقاً
+          status: 'completed'
+        };
+        setUploadedFile(recoveredFile);
+      }
+
     } catch (error) {
       console.error('Failed to load chat details:', error);
+      // في حال الخطأ، نضمن تنظيف الملف
+      setUploadedFile(null);
     } finally {
       setIsLoading(false);
     }
   };
 
+// 1. تعديل دالة إنشاء محادثة فارغة
   const createNewChat = async () => {
     try {
-      const newChatData = await chatService.createChat(uploadedFile?.id);
+      // 🔥 تنظيف الملف القديم فوراً
+      // هذا يضمن أن المحادثة الجديدة تبدأ نظيفة تماماً
+      setUploadedFile(null);
+      setUploadProgress(0);
+
+      // استدعاء السيرفر لإنشاء محادثة (بدون تمرير أي ملف)
+      const newChatData = await chatService.createChat();
       
       const newChat: Chat = {
         id: newChatData.id,
         title: newChatData.title || 'محادثة جديدة',
         date: new Date(newChatData.createdAt || new Date()),
         messages: [],
-        fileId: newChatData.fileId,
+        fileId: undefined, // تأكيد أن لا يوجد ملف
       };
 
       setChats(prev => [newChat, ...prev]);
@@ -125,11 +153,16 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setMessages([]); 
     } catch (error) {
       console.error('Failed to create chat:', error);
+      alert('فشل إنشاء المحادثة');
     }
   };
 
-  const selectChat = (chatId: string | null) => {
+const selectChat = (chatId: string | null) => {
     setActiveChatId(chatId);
+    
+    // 🔥 تنظيف الملف المرفوع عند التنقل بين المحادثات
+    // حتى لا يظهر شريط ملف سابق وأنت تتصفح محادثة أخرى
+    setUploadedFile(null); 
   };
 
 // دالة الإرسال (النسخة النظيفة والمبسطة)
@@ -198,21 +231,43 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const uploadFile = async (file: File) => {
     setIsUploading(true);
-    setUploadProgress(10); 
+    setUploadProgress(0); 
+
+    // ✅ الخطوة المفقودة:
+    // إنشاء كائن ملف "مؤقت" ليظهر الشريط فوراً في الواجهة
+    const tempFile: UploadedFile = {
+      id: 'temp-' + Date.now(), // معرف مؤقت
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      progress: 0,
+      status: 'uploading'
+    };
+    setUploadedFile(tempFile); // الآن سيظهر الشريط للمستخدم
 
     try {
-      // 1. رفع الملف واستلام البيانات (التي تحتوي على ID)
+      // محاكاة حركة الشريط ليعرف المستخدم أن هناك عملية جارية
+      // (لأن الـ axios الحالي لا يدعم onUploadProgress بدون تعديل)
+      const progressInterval = setInterval(() => {
+        setUploadedFile(prev => {
+          if (!prev || prev.progress >= 90) return prev;
+          return { ...prev, progress: prev.progress + 10 };
+        });
+      }, 500);
+
+      // 1. رفع الملف الفعلي
       const uploadedData = await fileService.uploadFile(file);
+      
+      clearInterval(progressInterval); // إيقاف المحاكاة
       setUploadProgress(100);
 
-      // التأكد من أن الـ ID موجود فعلاً
       if (!uploadedData || !uploadedData.id) {
         throw new Error("لم يتم العثور على معرف الملف في رد السيرفر");
       }
 
-      const fileId = uploadedData.id; // هذا هو الـ UUID القادم من الباك إند
+      const fileId = uploadedData.id;
 
-      // تحديث حالة الملف في الواجهة
+      // تحديث الحالة النهائية للملف (مكتمل 100%)
       const newUploadedFile: UploadedFile = {
         id: fileId,
         name: uploadedData.filename || file.name,
@@ -223,8 +278,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       };
       setUploadedFile(newUploadedFile);
       
-      // 2. 🔥 الخطوة الحاسمة: إنشاء محادثة فوراً باستخدام هذا الـ ID
-      // هذا يربط الملف بالمحادثة في قاعدة البيانات
+      // 2. إنشاء المحادثة وربطها بالملف
       const newChatData = await chatService.createChat(fileId);
       
       const newChat: Chat = {
@@ -232,18 +286,17 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           title: newChatData.title || file.name,
           date: new Date(),
           messages: [],
-          fileId: fileId // نحتفظ به في الواجهة أيضاً
+          fileId: fileId
       };
 
-      // 3. تفعيل المحادثة الجديدة
       setChats(prev => [newChat, ...prev]);
       setActiveChatId(newChatData.id);
-      setMessages([]); // تنظيف الشاشة للملف الجديد
+      setMessages([]);
 
     } catch (error: any) {
       console.error('Failed to upload file:', error);
       alert(error.message || 'فشل رفع الملف');
-      setUploadedFile(null);
+      setUploadedFile(null); // إخفاء الشريط عند الفشل
     } finally {
       setIsUploading(false);
       setUploadProgress(0);

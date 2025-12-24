@@ -20,14 +20,17 @@ export class AIService {
     if (!config.geminiApiKey) {
       console.warn('⚠️ Gemini API Key missing!');
     }
-    // إعداد النموذج
+    // استخدام الموديل المحدد في الإعدادات أو العودة للنسخة المستقرة 1.5
+    const modelName = config.geminiModel || 'gemini-1.5-flash';
+    
     this.model = genAI.getGenerativeModel({
-      model: config.geminiModel || 'gemini-1.5-flash',
+      model: modelName,
       generationConfig: {
-        temperature: 0.7, // توازن بين الإبداع والدقة
+        temperature: 0.7,
         maxOutputTokens: 2048,
       },
     });
+    console.log(`🤖 AI Service initialized with model: ${modelName}`);
   }
 
   // الوظيفة الرئيسية: توليد الرد
@@ -38,48 +41,59 @@ export class AIService {
       const parts: Part[] = [];
       let hasFileContext = false;
 
-      // 1. إذا كان هناك ملف، نجلبه من البيانات المخزنة
+      // 1. التعامل مع الملفات
       if (fileId) {
         const file = await prisma.file.findUnique({ where: { id: fileId } });
         
-        // نتأكد أن الملف تمت معالجته وله URI من Gemini
-        if (file && file.status === 'completed' && file.metadata) {
-          const metadata = file.metadata as any;
-          if (metadata.geminiFileUri) {
-            parts.push({
-              fileData: {
-                mimeType: metadata.geminiMimeType,
-                fileUri: metadata.geminiFileUri,
-              },
-            });
-            hasFileContext = true;
+        if (file) {
+          if (file.status === 'processing') {
+            return {
+              content: "عذراً، ما زلت أقوم بقراءة وتحليل الملف.. ⏳\nيرجى الانتظار بضع ثوانٍ ثم المحاولة مرة أخرى.",
+              metadata: { hasFileContext: false }
+            };
+          }
+
+          if (file.status === 'error') {
+            return {
+              content: `واجهت مشكلة في قراءة محتوى الملف. يرجى محاولة رفعه مرة أخرى.`,
+              metadata: { hasFileContext: false }
+            };
+          }
+
+          if (file.status === 'completed' && file.metadata) {
+            const metadata = file.metadata as any;
+            if (metadata.geminiFileUri) {
+              parts.push({
+                fileData: {
+                  mimeType: metadata.geminiMimeType,
+                  fileUri: metadata.geminiFileUri,
+                },
+              });
+              hasFileContext = true;
+            }
           }
         }
       }
 
-      // 2. بناء تعليمات النظام (System Prompt)
+      // 2. التعليمات
       const systemInstruction = `
         أنت مساعد ذكي متخصص في تحليل المستندات.
         ${hasFileContext 
-          ? 'لديك ملف مرفق. أجب عن أسئلة المستخدم بناءً عليه بدقة. إذا كانت المعلومة غير موجودة في الملف، قل ذلك بوضوح.' 
+          ? 'لديك ملف مرفق. أجب عن أسئلة المستخدم بناءً عليه بدقة.' 
           : 'أجب عن الأسئلة العامة بدقة واختصار.'}
       `;
 
-      // 3. دمج تاريخ المحادثة للسياق
+      // 3. بناء السياق
       let fullPrompt = `${systemInstruction}\n\n`;
-      
-      // نأخذ آخر 5 رسائل فقط لتوفير التوكنز
       chatHistory.slice(-5).forEach(msg => {
         const role = msg.messageType === 'user' ? 'المستخدم' : 'المساعد';
         fullPrompt += `${role}: ${msg.content}\n`;
       });
-
       fullPrompt += `المستخدم: ${userMessage}\nالمساعد:`;
 
-      // 4. إضافة النص للطلب
       parts.push({ text: fullPrompt });
 
-      // 5. الإرسال لـ Gemini
+      // 4. الإرسال لـ Gemini (مع معالجة الأخطاء)
       const result = await this.model.generateContent({
         contents: [{ role: 'user', parts }],
       });
@@ -95,20 +109,28 @@ export class AIService {
 
     } catch (error: any) {
       console.error('AI Generation Error:', error);
+
+      // 🔥 معالجة خطأ الكوتة (429) بشكل خاص
+      if (error.status === 429 || error.message?.includes('429') || error.message?.includes('Quota exceeded')) {
+        return {
+          content: "عذراً، السيرفر مشغول جداً حالياً (تجاوزنا الحد المسموح من الطلبات 🚦). يرجى الانتظار دقيقة واحدة والمحاولة مجدداً.",
+          metadata: { error: 'rate_limit' }
+        };
+      }
+
       throw new AppError('فشل في توليد الرد من الذكاء الاصطناعي', 500);
     }
   }
   
-  // وظيفة إضافية: اقتراح عنوان للمحادثة من أول رسالة
   async generateTitle(firstMessage: string): Promise<string> {
     try {
+      // نستخدم نموذجاً أخف أو نفس النموذج لتوليد العنوان
       const result = await this.model.generateContent(`
-        لخص الجملة التالية في عنوان قصير جداً (3-5 كلمات) للمحادثة:
-        "${firstMessage}"
-        العنوان:
+        لخص الجملة التالية في عنوان (3-5 كلمات): "${firstMessage}"
       `);
       return result.response.text().trim();
     } catch (e) {
+      // في حال الفشل، لا نوقف التطبيق، بل نعيد عنواناً افتراضياً
       return 'محادثة جديدة';
     }
   }

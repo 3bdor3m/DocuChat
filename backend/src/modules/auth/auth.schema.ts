@@ -11,11 +11,7 @@ export const RegisterSchema = z.object({
     password: z
       .string({ message: 'كلمة المرور مطلوبة' })
       .min(8, 'كلمة المرور يجب أن تكون 8 أحرف على الأقل')
-      .regex(/^(?=.*[A-Z])(?=.*\d)/, 'كلمة المرور يجب أن تحتوي على حرف كبير ورقم'),
-    fullName: z
-      .string({ message: 'الاسم الكامل مطلوب' })
-      .min(3, 'الاسم يجب أن يكون 3 أحرف على الأقل')
-      .trim(),
+      .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/, 'يجب أن تحتوي كلمة المرور على حرف صغير، حرف كبير، رقم، ورمز خاص'),
     firstName: z.string().optional(),
     lastName: z.string().optional(),
   }),
