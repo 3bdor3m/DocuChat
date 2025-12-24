@@ -100,7 +100,6 @@ const handleSubmit = async (e: React.FormEvent) => {
       await authService.register({
         email: formData.email,
         password: formData.password,
-        fullName,
         firstName: cleanFirstName,
         lastName: cleanLastName,
       });
