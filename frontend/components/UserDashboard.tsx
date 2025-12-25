@@ -169,7 +169,7 @@ export const UserDashboard = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
           <Link
             to="/chat"
-            className="bg-gradient-to-br from-[#2873ec] to-[#4a8fff] rounded-xl p-6 text-center hover:scale-105 transition-transform duration-300 shadow-[0_0_20px_rgba(40,115,236,0.3)]"
+            className="bg-linear-to-br from-[#2873ec] to-[#4a8fff] rounded-xl p-6 text-center hover:scale-105 transition-transform duration-300 shadow-[0_0_20px_rgba(40,115,236,0.3)]"
           >
             <FaUpload className="text-white text-3xl mx-auto mb-3" />
             <span className="text-white font-bold">رفع ملف جديد</span>

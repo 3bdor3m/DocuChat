@@ -164,7 +164,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       <div className="text-center max-w-md px-4">
         {/* Logo/Icon */}
         <div className="mb-6 flex justify-center">
-          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#2873ec] to-[#1a5bb8] flex items-center justify-center shadow-lg shadow-[#2873ec]/30">
+          <div className="w-20 h-20 rounded-full bg-linear-to-br from-[#2873ec] to-[#1a5bb8] flex items-center justify-center shadow-lg shadow-[#2873ec]/30">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
             </svg>
@@ -264,7 +264,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <div className={`flex max-w-[85%] ${msg.type === 'user' ? 'flex-row-reverse' : 'flex-row'} gap-4`}>
                 {/* Bot Avatar */}
                 {msg.type === 'bot' && (
-                  <div className="shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20 mt-1">
+                  <div className="shrink-0 w-8 h-8 rounded-full bg-linear-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20 mt-1">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
                     </svg>
@@ -420,14 +420,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             </div>
           )}
 
-          <div className="relative bg-[#1a1a1a] border border-gray-800 rounded-[2rem] shadow-2xl shadow-black/50 transition-colors focus-within:border-gray-700">
+          <div className="relative bg-[#1a1a1a] border border-gray-800 rounded-4xl shadow-2xl shadow-black/50 transition-colors focus-within:border-gray-700">
             <textarea
               ref={textareaRef}
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
               placeholder={searchMode ? "اطرح سؤالاً للبحث..." : "كيف يمكنني مساعدتك اليوم؟"}
-              className="w-full bg-transparent text-white rounded-[2rem] pl-4 pr-4 py-4 focus:outline-none resize-none max-h-[200px] custom-scrollbar text-right min-h-[60px]"
+              className="w-full bg-transparent text-white rounded-4xl pl-4 pr-4 py-4 focus:outline-none resize-none max-h-[200px] custom-scrollbar text-right min-h-[60px]"
               rows={1}
               style={{ minHeight: '60px' }}
               disabled={isLoading || isTyping}
