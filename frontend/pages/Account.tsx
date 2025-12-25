@@ -357,7 +357,7 @@ const Account = () => {
 
       <div className="container mx-auto px-4 py-12 relative z-10 max-w-6xl">
         <div className="text-center mb-8">
-          <h1 className="text-3xl md:text-4xl font-bold mb-2 bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+          <h1 className="text-3xl md:text-4xl font-bold mb-2 bg-linear-to-r from-white to-gray-400 bg-clip-text text-transparent">
             حسابي
           </h1>
           <p className="text-gray-400">إدارة معلوماتك الشخصية وإعداداتك</p>
@@ -369,7 +369,7 @@ const Account = () => {
               <div className="bg-gray-900/50 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl h-full w-full relative overflow-hidden">
                 <div className="flex flex-col items-center">
                   <div className="relative group">
-                    <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-[#2873ec]/30 bg-gradient-to-br from-[#2873ec]/20 to-[#1a5bb8]/20 flex items-center justify-center">
+                    <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-[#2873ec]/30 bg-linear-to-br from-[#2873ec]/20 to-[#1a5bb8]/20 flex items-center justify-center">
                       {profileImage ? (
                         <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
                       ) : (
@@ -439,7 +439,7 @@ const Account = () => {
                 </div>
                 {user?.subscriptionTier !== 'premium' && (
                   <Link to="/pricing">
-                    <button className="w-full mt-4 bg-gradient-to-r from-[#2873ec] to-[#1a5bb8] text-white py-2.5 rounded-xl font-medium hover:opacity-90 transition-all">
+                    <button className="w-full mt-4 bg-linear-to-r from-[#2873ec] to-[#1a5bb8] text-white py-2.5 rounded-xl font-medium hover:opacity-90 transition-all">
                       ترقية الباقة
                     </button>
                   </Link>
@@ -463,7 +463,7 @@ const Account = () => {
                 <button
                   onClick={handleActivateCode}
                   disabled={activationCode.length !== 10 || isActivating}
-                  className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 text-white py-2.5 rounded-xl font-medium hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full bg-linear-to-r from-yellow-500 to-yellow-600 text-white py-2.5 rounded-xl font-medium hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isActivating ? 'جاري التفعيل...' : 'تفعيل'}
                 </button>
