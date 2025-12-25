@@ -4,6 +4,8 @@ import { authService } from '../services/authService';
 import { fileService } from '../services/fileService';
 import { chatService } from '../services/chatService';
 import { FaFileAlt, FaComments, FaEnvelope, FaDatabase, FaUpload, FaPlus, FaFolder, FaUser } from 'react-icons/fa';
+import SpotlightCard from './SpotlightCard';
+import TextPressure from '../src/component/TextPressure';
 
 export const UserDashboard = () => {
   const [user, setUser] = useState<any>(null);
@@ -23,21 +25,21 @@ export const UserDashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const [userData, filesResponse, chatsResponse] = await Promise.all([
+      const [userData, filesRaw, chatsRaw] = await Promise.all([
         authService.getCurrentUser(),
-        fileService.getFiles().catch(() => ({ items: [], total: 0, page: 1, limit: 10, pages: 0 })),
-        chatService.getChats().catch(() => ({ items: [], total: 0, page: 1, limit: 20, pages: 0 }))
+        fileService.getFiles().catch(() => []),
+        chatService.getChats().catch(() => [])
       ]);
 
-      const filesData = filesResponse.items || [];
-      const chatsData = chatsResponse.items || [];
+      const filesData = Array.isArray(filesRaw) ? filesRaw : (filesRaw as any)?.files || [];
+      const chatsData = Array.isArray(chatsRaw) ? chatsRaw : (chatsRaw as any)?.items || [];
 
       setUser(userData);
 
-      // Calculate stats
+      // حساب الإحصائيات
       const totalMessages = chatsData.reduce((sum: number, chat: any) => sum + (chat.messages?.length || 0), 0);
       const storageUsed = filesData.reduce((sum: number, file: any) => sum + Number(file.fileSize || 0), 0);
-      const storagePercentage = Math.min((storageUsed / (1024 * 1024 * 1024)) * 100, 100); // Max 1GB
+      const storagePercentage = Math.min((storageUsed / (1024 * 1024 * 1024)) * 100, 100);
 
       setStats({
         totalFiles: filesData.length,
@@ -46,7 +48,6 @@ export const UserDashboard = () => {
         storageUsed: Math.round(storagePercentage)
       });
 
-      // Get recent files and chats
       setRecentFiles(filesData.slice(0, 3));
       setRecentChats(chatsData.slice(0, 3));
 
@@ -59,8 +60,11 @@ export const UserDashboard = () => {
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center min-h-screen">
-        <div className="text-white text-xl">جاري التحميل...</div>
+      <div className="flex-1 flex items-center justify-center min-h-screen bg-black">
+        <div className="animate-pulse flex flex-col items-center">
+          <div className="h-12 w-12 bg-[#2873ec] rounded-full mb-4 animate-bounce"></div>
+          <div className="text-white text-xl">جاري تحميل بياناتك...</div>
+        </div>
       </div>
     );
   }
@@ -68,13 +72,37 @@ export const UserDashboard = () => {
   const firstName = user?.firstName || user?.fullName?.split(' ')[0] || 'مستخدم';
 
   return (
-    <section className="flex-1 flex flex-col items-center justify-center px-4 py-12 min-h-screen">
+    <section className="flex-1 flex flex-col items-center justify-center px-4 py-12 min-h-screen bg-transparent">
       <div className="w-full max-w-6xl mx-auto">
 
         {/* Welcome Message */}
-        <div className="text-center mb-12">
-          <h1 className="text-white font-bold text-4xl md:text-5xl lg:text-6xl mb-4">
-            مرحباً بعودتك، <span className="bg-gradient-to-r from-[#2873ec] to-[#4a8fff] bg-clip-text text-transparent">{firstName}</span>! 👋
+        {/* إضافة dir="rtl" للحاوية الرئيسية لضمان الترتيب الصحيح */}
+        <div className="text-center mb-12" dir="rtl">
+          {/* استخدمنا flex-wrap للسماح بالالتفاف في الشاشات الصغيرة، و items-baseline لمحاذاة النصوص */}
+          <h1 className="text-white font-bold text-4xl md:text-5xl lg:text-6xl mb-4 flex flex-wrap items-baseline justify-center gap-x-3 gap-y-2">
+            <span>مرحباً بعودتك،</span>
+
+            {/* 👇 التعديل الجذري هنا 👇 */}
+            {/* أزلنا inline-block والارتفاع الثابت. تركنا فقط dir="ltr" لعزل الاسم */}
+            <span dir="ltr" className="relative">
+              <TextPressure
+                text={firstName}
+                flex={false}     // غيرناه لـ false لكي لا يحاول التمدد ويأخذ حجمه الطبيعي
+                alpha={false}
+                stroke={false}
+                width={false}    // غيرناه لـ false أيضاً
+                weight={true}
+                italic={true}
+                auto={true}
+                autoSpeed={1}
+                textColor="#2873ec"
+                strokeColor="#ff0000"
+                minFontSize={100} // حجم خط مناسب ليكون بارزاً
+              />
+            </span>
+
+            {/* عزلنا علامة التعجب والإيموجي لضمان ظهورهم في النهاية بشكل صحيح */}
+            <span dir="ltr">! 👋</span>
           </h1>
           <p className="text-gray-300 text-lg md:text-xl">
             إليك ملخص نشاطك اليوم
@@ -83,49 +111,58 @@ export const UserDashboard = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+
           {/* Total Files */}
-          <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20 shadow-[0_0_20px_rgba(40,115,236,0.1)] hover:shadow-[0_0_30px_rgba(40,115,236,0.2)] transition-all duration-300">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-blue-500/10 p-3 rounded-lg">
-                <FaFileAlt className="text-blue-400 text-2xl" />
+          <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)">
+            <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20 shadow-[0_0_20px_rgba(40,115,236,0.1)] hover:shadow-[0_0_30px_rgba(40,115,236,0.2)] transition-all duration-300 h-full">
+              <div className="flex items-center justify-between mb-4">
+                <div className="bg-blue-500/10 p-3 rounded-lg">
+                  <FaFileAlt className="text-blue-400 text-2xl" />
+                </div>
+                <span className="text-3xl font-bold text-white">{stats.totalFiles}</span>
               </div>
-              <span className="text-3xl font-bold text-white">{stats.totalFiles}</span>
+              <h3 className="text-gray-400 text-sm">إجمالي الملفات</h3>
             </div>
-            <h3 className="text-gray-400 text-sm">إجمالي الملفات</h3>
-          </div>
+          </SpotlightCard>
 
           {/* Active Chats */}
-          <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20 shadow-[0_0_20px_rgba(40,115,236,0.1)] hover:shadow-[0_0_30px_rgba(40,115,236,0.2)] transition-all duration-300">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-green-500/10 p-3 rounded-lg">
-                <FaComments className="text-green-400 text-2xl" />
+          <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)">
+            <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20 shadow-[0_0_20px_rgba(40,115,236,0.1)] hover:shadow-[0_0_30px_rgba(40,115,236,0.2)] transition-all duration-300 h-full">
+              <div className="flex items-center justify-between mb-4">
+                <div className="bg-green-500/10 p-3 rounded-lg">
+                  <FaComments className="text-green-400 text-2xl" />
+                </div>
+                <span className="text-3xl font-bold text-white">{stats.activeChats}</span>
               </div>
-              <span className="text-3xl font-bold text-white">{stats.activeChats}</span>
+              <h3 className="text-gray-400 text-sm">المحادثات النشطة</h3>
             </div>
-            <h3 className="text-gray-400 text-sm">المحادثات النشطة</h3>
-          </div>
+          </SpotlightCard>
 
           {/* Total Messages */}
-          <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20 shadow-[0_0_20px_rgba(40,115,236,0.1)] hover:shadow-[0_0_30px_rgba(40,115,236,0.2)] transition-all duration-300">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-purple-500/10 p-3 rounded-lg">
-                <FaEnvelope className="text-purple-400 text-2xl" />
+          <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)">
+            <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20 shadow-[0_0_20px_rgba(40,115,236,0.1)] hover:shadow-[0_0_30px_rgba(40,115,236,0.2)] transition-all duration-300 h-full">
+              <div className="flex items-center justify-between mb-4">
+                <div className="bg-purple-500/10 p-3 rounded-lg">
+                  <FaEnvelope className="text-purple-400 text-2xl" />
+                </div>
+                <span className="text-3xl font-bold text-white">{stats.totalMessages}</span>
               </div>
-              <span className="text-3xl font-bold text-white">{stats.totalMessages}</span>
+              <h3 className="text-gray-400 text-sm">إجمالي الرسائل</h3>
             </div>
-            <h3 className="text-gray-400 text-sm">إجمالي الرسائل</h3>
-          </div>
+          </SpotlightCard>
 
           {/* Storage Used */}
-          <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20 shadow-[0_0_20px_rgba(40,115,236,0.1)] hover:shadow-[0_0_30px_rgba(40,115,236,0.2)] transition-all duration-300">
-            <div className="flex items-center justify-between mb-4">
-              <div className="bg-orange-500/10 p-3 rounded-lg">
-                <FaDatabase className="text-orange-400 text-2xl" />
+          <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)" className='rounded-3xl'>
+            <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20 shadow-[0_0_20px_rgba(40,115,236,0.1)] hover:shadow-[0_0_30px_rgba(40,115,236,0.2)] transition-all duration-300 h-full">
+              <div className="flex items-center justify-between mb-4">
+                <div className="bg-orange-500/10 p-3 rounded-lg">
+                  <FaDatabase className="text-orange-400 text-2xl" />
+                </div>
+                <span className="text-3xl font-bold text-white">{stats.storageUsed}%</span>
               </div>
-              <span className="text-3xl font-bold text-white">{stats.storageUsed}%</span>
+              <h3 className="text-gray-400 text-sm">التخزين (1GB Max)</h3>
             </div>
-            <h3 className="text-gray-400 text-sm">استخدام التخزين</h3>
-          </div>
+          </SpotlightCard>
         </div>
 
         {/* Quick Actions */}
@@ -140,27 +177,36 @@ export const UserDashboard = () => {
 
           <Link
             to="/chat"
+            state={{ newChat: true }}
             className="bg-gray-900/50 backdrop-blur-md border border-[#2873ec]/20 rounded-xl p-6 text-center hover:scale-105 transition-transform duration-300"
           >
             <FaPlus className="text-[#2873ec] text-3xl mx-auto mb-3" />
             <span className="text-white font-bold">بدء محادثة</span>
           </Link>
 
-          <Link
-            to="/chat"
-            className="bg-gray-900/50 backdrop-blur-md border border-[#2873ec]/20 rounded-xl p-6 text-center hover:scale-105 transition-transform duration-300"
-          >
-            <FaFolder className="text-[#2873ec] text-3xl mx-auto mb-3" />
-            <span className="text-white font-bold">ملفاتي</span>
-          </Link>
+          {/* 🔥 تم إضافة SpotlightCard هنا لـ "ملفاتي" */}
+          <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)">
+            <Link
+              to="/chat"
+              // تمت إزالة hover:scale-105 وإضافة h-full w-full block
+              className="bg-gray-900/50 backdrop-blur-md border border-[#2873ec]/20 rounded-xl p-6 text-center h-full w-full block"
+            >
+              <FaFolder className="text-[#2873ec] text-3xl mx-auto mb-3" />
+              <span className="text-white font-bold">ملفاتي</span>
+            </Link>
+          </SpotlightCard>
 
-          <Link
-            to="/account"
-            className="bg-gray-900/50 backdrop-blur-md border border-[#2873ec]/20 rounded-xl p-6 text-center hover:scale-105 transition-transform duration-300"
-          >
-            <FaUser className="text-[#2873ec] text-3xl mx-auto mb-3" />
-            <span className="text-white font-bold">حسابي</span>
-          </Link>
+          {/* 🔥 تم إضافة SpotlightCard هنا لـ "حسابي" */}
+          <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)">
+            <Link
+              to="/account"
+              // تمت إزالة hover:scale-105 وإضافة h-full w-full block
+              className="bg-gray-900/50 backdrop-blur-md border border-[#2873ec]/20 rounded-xl p-6 text-center h-full w-full block"
+            >
+              <FaUser className="text-[#2873ec] text-3xl mx-auto mb-3" />
+              <span className="text-white font-bold">حسابي</span>
+            </Link>
+          </SpotlightCard>
         </div>
 
         {/* Recent Activity */}
@@ -180,13 +226,13 @@ export const UserDashboard = () => {
                     className="bg-gray-800/30 rounded-lg p-4 hover:bg-gray-800/50 transition-colors"
                   >
                     <div className="flex items-center justify-between">
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <p className="text-white font-medium truncate">{file.originalFilename}</p>
                         <p className="text-gray-400 text-sm">
                           {new Date(file.createdAt).toLocaleDateString('ar-EG')}
                         </p>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${file.status === 'completed' ? 'bg-green-500/20 text-green-400' :
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium mr-2 whitespace-nowrap ${file.status === 'completed' ? 'bg-green-500/20 text-green-400' :
                         file.status === 'processing' ? 'bg-yellow-500/20 text-yellow-400' :
                           'bg-red-500/20 text-red-400'
                         }`}>
@@ -227,13 +273,13 @@ export const UserDashboard = () => {
                     className="block bg-gray-800/30 rounded-lg p-4 hover:bg-gray-800/50 transition-colors"
                   >
                     <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <p className="text-white font-medium truncate">{chat.title}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-medium truncate">{chat.title || 'محادثة جديدة'}</p>
                         <p className="text-gray-400 text-sm">
                           {new Date(chat.updatedAt).toLocaleDateString('ar-EG')}
                         </p>
                       </div>
-                      <span className="text-[#2873ec] text-sm">
+                      <span className="text-[#2873ec] text-sm mr-2 whitespace-nowrap">
                         {chat.messages?.length || 0} رسالة
                       </span>
                     </div>

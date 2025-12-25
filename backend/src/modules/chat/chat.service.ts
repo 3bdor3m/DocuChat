@@ -6,7 +6,6 @@ const prisma = new PrismaClient();
 
 export class ChatService {
   
-  // إنشاء محادثة جديدة
   async createChat(userId: string, fileId?: string | null) {
     return await prisma.chat.create({
       data: {
@@ -17,54 +16,37 @@ export class ChatService {
     });
   }
 
-  // جلب محادثات المستخدم
   async getUserChats(userId: string) {
     return await prisma.chat.findMany({
       where: { userId },
       orderBy: { updatedAt: 'desc' },
       include: { 
-        file: { select: { originalFilename: true } } // هنا نحن نختار الاسم فقط، لذا لا توجد مشكلة BigInt
+        file: { select: { originalFilename: true } } 
       }
     });
   }
 
-  // جلب محادثة واحدة بالتفصيل
   async getChat(chatId: string, userId: string) {
     const chat = await prisma.chat.findFirst({
       where: { id: chatId, userId },
       include: { 
         messages: { orderBy: { createdAt: 'asc' } },
-        file: true // هنا المشكلة! هذا يجلب fileSize وهو BigInt
+        file: true 
       },
     });
-
     if (!chat) throw new AppError('المحادثة غير موجودة', 404);
-
-    // 🔥 الحل: تحويل BigInt إلى Number قبل الإرسال
-    if (chat.file) {
-      return {
-        ...chat,
-        file: {
-          ...chat.file,
-          fileSize: Number(chat.file.fileSize) // التحويل هنا
-        }
-      };
-    }
-
     return chat;
   }
 
-  // إرسال رسالة
-  async sendMessage(chatId: string, userId: string, content: string) {
-    // 1. التحقق من وجود المحادثة
+  // 🔥 التعديل هنا: إضافة temperature كمعامل اختياري
+  async sendMessage(chatId: string, userId: string, content: string, temperature?: number) {
     const chat = await prisma.chat.findFirst({
       where: { id: chatId, userId },
-      include: { messages: true, file: true }, // نحتاج الملف أيضاً هنا لتمريره
+      include: { messages: true }, 
     });
 
     if (!chat) throw new AppError('المحادثة غير موجودة', 404);
 
-    // 2. حفظ رسالة المستخدم
     const userMsg = await prisma.message.create({
       data: {
         chatId,
@@ -73,7 +55,6 @@ export class ChatService {
       },
     });
 
-    // 3. تحديث عنوان المحادثة إذا كانت الرسالة الأولى
     if (chat.messages.length === 0) {
       const newTitle = await aiService.generateTitle(content);
       await prisma.chat.update({
@@ -82,16 +63,15 @@ export class ChatService {
       });
     }
 
-    // 4. إرسال للذكاء الاصطناعي والحصول على الرد
-    // نمرر fileId الموجود في المحادثة (الباك إند هو سيد الموقف الآن)
+    // 🔥 نمرر درجة الإبداع للخدمة
     const aiResponse = await aiService.generateResponse({
       chatId,
-      fileId: chat.fileId, 
+      fileId: chat.fileId,
       userMessage: content,
       chatHistory: chat.messages,
+      temperature, // تمرير القيمة
     });
 
-    // 5. حفظ رد البوت
     const botMsg = await prisma.message.create({
       data: {
         chatId,
@@ -101,7 +81,6 @@ export class ChatService {
       },
     });
 
-    // تحديث وقت المحادثة
     await prisma.chat.update({
         where: { id: chatId },
         data: { updatedAt: new Date() }
@@ -110,7 +89,6 @@ export class ChatService {
     return { userMsg, botMsg };
   }
 
-  // حذف محادثة
   async deleteChat(chatId: string, userId: string) {
     const chat = await prisma.chat.findFirst({ where: { id: chatId, userId } });
     if (!chat) throw new AppError('المحادثة غير موجودة', 404);

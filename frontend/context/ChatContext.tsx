@@ -70,7 +70,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const data = await chatService.getChats();
       // التعامل مع اختلاف هيكلية الرد (مصفوفة أو كائن)
       const items = Array.isArray(data) ? data : (data.chats || []);
-      
+
       const formattedChats: Chat[] = items.map((chat: any) => ({
         id: chat.id,
         title: chat.title || 'محادثة جديدة',
@@ -85,22 +85,22 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   // دالة لجلب رسائل المحادثة الحالية
-// دالة لجلب تفاصيل المحادثة عند اختيارها
+  // دالة لجلب تفاصيل المحادثة عند اختيارها
   const loadActiveChatDetails = async (chatId: string) => {
     try {
       setIsLoading(true);
       // 1. تنظيف أي ملف سابق معلق
-      setUploadedFile(null); 
+      setUploadedFile(null);
 
       // 2. جلب بيانات المحادثة من السيرفر
       const chatData = await chatService.getChat(chatId);
-      
+
       // 3. معالجة الرسائل
       const serverMessages = chatData.messages || [];
       const formattedMessages: Message[] = serverMessages.map((msg: any) => ({
         id: msg.id,
-        type: msg.role === 'user' ? 'user' : 'bot', // تأكد من توافق التسمية مع الباك إند
-        content: msg.content || "", 
+        type: msg.messageType === 'user' ? 'user' : 'bot',
+        content: msg.content || "",
         timestamp: new Date(msg.createdAt || new Date()),
         sources: msg.sources,
       }));
@@ -129,7 +129,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-// 1. تعديل دالة إنشاء محادثة فارغة
+  // 1. تعديل دالة إنشاء محادثة فارغة
   const createNewChat = async () => {
     try {
       // 🔥 تنظيف الملف القديم فوراً
@@ -139,7 +139,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // استدعاء السيرفر لإنشاء محادثة (بدون تمرير أي ملف)
       const newChatData = await chatService.createChat();
-      
+
       const newChat: Chat = {
         id: newChatData.id,
         title: newChatData.title || 'محادثة جديدة',
@@ -150,22 +150,22 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       setChats(prev => [newChat, ...prev]);
       setActiveChatId(newChatData.id);
-      setMessages([]); 
+      setMessages([]);
     } catch (error) {
       console.error('Failed to create chat:', error);
       alert('فشل إنشاء المحادثة');
     }
   };
 
-const selectChat = (chatId: string | null) => {
+  const selectChat = (chatId: string | null) => {
     setActiveChatId(chatId);
-    
+
     // 🔥 تنظيف الملف المرفوع عند التنقل بين المحادثات
     // حتى لا يظهر شريط ملف سابق وأنت تتصفح محادثة أخرى
-    setUploadedFile(null); 
+    setUploadedFile(null);
   };
 
-// دالة الإرسال (النسخة النظيفة والمبسطة)
+  // دالة الإرسال (النسخة النظيفة والمبسطة)
   const sendMessage = async (content: string) => {
     if (!activeChatId) return;
 
@@ -185,7 +185,8 @@ const selectChat = (chatId: string | null) => {
     try {
       // ✅ التعديل هنا: نرسل المحتوى فقط
       // لم نعد بحاجة لحساب targetFileId وإرساله
-      const response = await chatService.sendMessage(activeChatId, content);
+      // داخل دالة sendMessage
+      const response = await chatService.sendMessage(activeChatId, content, creativityLevel);
 
       if (controller.signal.aborted) return;
 
@@ -231,7 +232,7 @@ const selectChat = (chatId: string | null) => {
 
   const uploadFile = async (file: File) => {
     setIsUploading(true);
-    setUploadProgress(0); 
+    setUploadProgress(0);
 
     // ✅ الخطوة المفقودة:
     // إنشاء كائن ملف "مؤقت" ليظهر الشريط فوراً في الواجهة
@@ -257,7 +258,7 @@ const selectChat = (chatId: string | null) => {
 
       // 1. رفع الملف الفعلي
       const uploadedData = await fileService.uploadFile(file);
-      
+
       clearInterval(progressInterval); // إيقاف المحاكاة
       setUploadProgress(100);
 
@@ -277,16 +278,16 @@ const selectChat = (chatId: string | null) => {
         status: 'completed'
       };
       setUploadedFile(newUploadedFile);
-      
+
       // 2. إنشاء المحادثة وربطها بالملف
       const newChatData = await chatService.createChat(fileId);
-      
+
       const newChat: Chat = {
-          id: newChatData.id,
-          title: newChatData.title || file.name,
-          date: new Date(),
-          messages: [],
-          fileId: fileId
+        id: newChatData.id,
+        title: newChatData.title || file.name,
+        date: new Date(),
+        messages: [],
+        fileId: fileId
       };
 
       setChats(prev => [newChat, ...prev]);

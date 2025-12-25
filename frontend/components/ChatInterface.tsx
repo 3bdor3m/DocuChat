@@ -18,18 +18,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   uploadProgress: propUploadProgress,
   isUploading: propIsUploading,
 }) => {
-  const { 
-    messages, 
-    isTyping, 
-    isLoading, 
-    sendMessage, 
-    searchMode, 
-    toggleSearchMode, 
-    stopGenerating, 
-    creativityLevel, 
-    setCreativityLevel, 
-    uploadFile: contextUploadFile, 
-    uploadedFile: contextUploadedFile, 
+  const {
+    messages,
+    isTyping,
+    isLoading,
+    sendMessage,
+    searchMode,
+    toggleSearchMode,
+    stopGenerating,
+    creativityLevel,
+    setCreativityLevel,
+    uploadFile: contextUploadFile,
+    uploadedFile: contextUploadedFile,
     clearUploadedFile,
     activeChatId,
     createNewChat
@@ -226,7 +226,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   );
 
   return (
-    <div 
+    <div
       className="flex-1 flex flex-col h-full bg-black relative"
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
@@ -255,7 +255,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       {messages.length === 0 && !uploadedFile ? (
         <EmptyState />
       ) : (
-        <div className="flex-1 overflow-y-auto px-4 pb-4 pt-16 space-y-6 custom-scrollbar relative z-10">
+        <div className="flex-1 overflow-y-auto px-4 pt-10 pb-4 space-y-4 custom-scrollbar max-w-4xl mx-auto w-full">
           {messages.map((msg) => (
             <div
               key={msg.id}
@@ -278,7 +278,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     }`}
                 >
                   {/* Copy Button */}
-                  <div className={`absolute top-2 ${msg.type === 'user' ? 'left-2' : 'left-0'} opacity-0 group-hover:opacity-100 transition-opacity`}>
+                  <div className={`absolute top-2 ${msg.type === 'user' ? 'left-20' : '-left-8'} opacity-0 group-hover:opacity-100 transition-opacity`}>
                     <CopyButton text={msg.content} />
                   </div>
 

@@ -14,6 +14,10 @@ export interface RegisterCredentials {
 }
 
 export interface User {
+  profileImage: string | null;
+  filesCount: number;
+  lastName: string;
+  firstName: string;
   id: string;
   email: string;
   fullName: string;

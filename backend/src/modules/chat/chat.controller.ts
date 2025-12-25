@@ -19,9 +19,10 @@ export const getChat = catchAsync(async (req: AuthRequest, res: Response) => {
   res.json(chat);
 });
 
+// 🔥 التعديل هنا: استقبال temperature وتمريرها
 export const sendMessage = catchAsync(async (req: AuthRequest, res: Response) => {
-  const { content } = req.body;
-  const result = await chatService.sendMessage(req.params.id, req.user!.userId, content);
+  const { content, temperature } = req.body;
+  const result = await chatService.sendMessage(req.params.id, req.user!.userId, content, temperature);
   res.status(201).json(result);
 });
 

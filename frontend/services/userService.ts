@@ -1,47 +1,38 @@
 import api from '../config/api';
 
-export interface UserProfile {
-  id: string;
-  email: string;
-  fullName: string;
-  firstName?: string;
-  lastName?: string;
-  profileImage?: string;
-  subscriptionTier: string;
-}
-
-export interface UserStats {
-  filesCount: number;
-  chatsCount: number;
-  // يمكن إضافة المزيد هنا مستقبلاً
-}
-
 export const userService = {
-  // جلب بيانات المستخدم الحالي
-  getMe: async () => {
-    const response = await api.get<UserProfile>('/users/me');
+  // تحديث الملف الشخصي
+  updateProfile: async (data: { firstName: string; lastName: string }) => {
+    const response = await api.put('/users/profile', data);
     return response.data;
   },
 
-  // تحديث البروفايل
-  updateProfile: async (data: Partial<UserProfile>) => {
-    const response = await api.put<{ status: string; data: UserProfile }>('/users/profile', data);
-    return response.data;
-  },
-
-  // جلب الإحصائيات (عدد الملفات والمحادثات)
-  getStats: async () => {
-    const response = await api.get<UserStats>('/users/stats');
+  // تحديث صورة البروفايل
+  updateProfileImage: async (image: string) => {
+    const response = await api.put('/users/profile-image', { image });
     return response.data;
   },
 
   // تغيير كلمة المرور
-  changePassword: async (data: any) => {
-    return await api.put('/users/password', data);
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    const response = await api.post('/auth/change-password', {
+      currentPassword,
+      newPassword,
+    });
+    return response.data;
+  },
+
+  // تصدير البيانات
+  exportData: async () => {
+    const response = await api.get('/users/export-data');
+    return response.data;
   },
 
   // حذف الحساب
-  deleteAccount: async () => {
-    return await api.delete('/users/account');
-  }
+  deleteAccount: async (password: string) => {
+    const response = await api.delete('/users/delete-account', {
+      data: { password }, // في طلبات DELETE، البادئ يرسل داخل data
+    });
+    return response.data;
+  },
 };

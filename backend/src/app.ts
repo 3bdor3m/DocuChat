@@ -8,6 +8,14 @@ import { config } from './config/index.js';
 import routes from './routes/index.js';
 import { globalErrorHandler } from './common/middleware/errorHandler.js';
 
+
+// حل مشكلة BigInt Serialization في كامل التطبيق
+// @ts-ignore
+BigInt.prototype.toJSON = function () {
+  const int = Number.parseInt(this.toString());
+  return int ?? this.toString();
+};
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -26,8 +34,9 @@ app.use(cors({
   credentials: true,
 }));
 
+// في الباك إند (Backend)
 app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cookieParser());
 
 // Request logging

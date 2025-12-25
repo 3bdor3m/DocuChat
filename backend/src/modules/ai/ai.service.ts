@@ -11,6 +11,7 @@ interface AIRequest {
   fileId: string | null;
   userMessage: string;
   chatHistory: any[];
+  temperature?: number;
 }
 
 export class AIService {
@@ -22,7 +23,7 @@ export class AIService {
     }
     // استخدام الموديل المحدد في الإعدادات أو العودة للنسخة المستقرة 1.5
     const modelName = config.geminiModel || 'gemini-1.5-flash';
-    
+
     this.model = genAI.getGenerativeModel({
       model: modelName,
       generationConfig: {
@@ -36,15 +37,15 @@ export class AIService {
   // الوظيفة الرئيسية: توليد الرد
   async generateResponse(req: AIRequest) {
     try {
-      const { fileId, userMessage, chatHistory } = req;
-      
+      const { fileId, userMessage, chatHistory, temperature } = req;
+
       const parts: Part[] = [];
       let hasFileContext = false;
 
       // 1. التعامل مع الملفات
       if (fileId) {
         const file = await prisma.file.findUnique({ where: { id: fileId } });
-        
+
         if (file) {
           if (file.status === 'processing') {
             return {
@@ -78,8 +79,8 @@ export class AIService {
       // 2. التعليمات
       const systemInstruction = `
         أنت مساعد ذكي متخصص في تحليل المستندات.
-        ${hasFileContext 
-          ? 'لديك ملف مرفق. أجب عن أسئلة المستخدم بناءً عليه بدقة.' 
+        ${hasFileContext
+          ? 'لديك ملف مرفق. أجب عن أسئلة المستخدم بناءً عليه بدقة.'
           : 'أجب عن الأسئلة العامة بدقة واختصار.'}
       `;
 
@@ -94,8 +95,11 @@ export class AIService {
       parts.push({ text: fullPrompt });
 
       // 4. الإرسال لـ Gemini (مع معالجة الأخطاء)
+      const generationConfig = temperature ? { temperature } : undefined;
+
       const result = await this.model.generateContent({
         contents: [{ role: 'user', parts }],
+        generationConfig,
       });
 
       const response = result.response;
@@ -121,7 +125,7 @@ export class AIService {
       throw new AppError('فشل في توليد الرد من الذكاء الاصطناعي', 500);
     }
   }
-  
+
   async generateTitle(firstMessage: string): Promise<string> {
     try {
       // نستخدم نموذجاً أخف أو نفس النموذج لتوليد العنوان

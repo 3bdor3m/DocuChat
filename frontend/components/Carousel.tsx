@@ -200,7 +200,7 @@ export default function Carousel({
               </div>
               <div className="p-5">
                 <div className="mb-1 font-black text-3xl text-white">{item.title}</div>
-                <p className="text-sm text-white">{item.description}</p>
+                <div className="text-sm text-white">{item.description}</div>
               </div>
             </motion.div>
           );

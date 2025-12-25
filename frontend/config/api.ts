@@ -39,14 +39,15 @@ api.interceptors.request.use(
 );
 
 // 5. Response Interceptor (معالجة انتهاء الجلسة)
+// حارس الاستجابة: طرد المستخدم إذا انتهت الجلسة
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // إذا انتهت الجلسة (401)، نظف المتصفح
-    if (error.response && error.response.status === 401) {
+    if (error.response?.status === 401) {
+      // التوكن منتهي أو غير صالح
       localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      // window.location.href = '/login'; // فعلها لاحقاً للتوجيه التلقائي
+      // توجيه إجباري لصفحة الدخول
+      window.location.href = '/login';
     }
     return Promise.reject(error);
   }

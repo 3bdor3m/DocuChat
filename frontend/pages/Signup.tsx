@@ -9,7 +9,7 @@ import { useToast } from "../context/ToastContext";
 const Signup = () => {
   const navigate = useNavigate();
   const toast = useToast();
-  
+
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -38,12 +38,13 @@ const Signup = () => {
     return "";
   };
 
-  // --- التعديل هنا: تحديث الشروط لتطابق الـ Backend (إضافة شرط الرقم) ---
+  // 🔥 التعديل هنا: تحديث الشروط لتطابق الباك إند بدقة
   const passwordRequirements = [
     { id: 1, text: "8 أحرف على الأقل", met: formData.password.length >= 8 },
-    { id: 2, text: "حرف كبير واحد على الأقل", met: /[A-Z]/.test(formData.password) },
-    { id: 3, text: "رقم واحد على الأقل", met: /\d/.test(formData.password) }, // عدلنا هذا الشرط ليطلب رقم
-    { id: 4, text: "أحرف إنجليزية فقط", met: /^[\x00-\x7F]*$/.test(formData.password) && formData.password.length > 0 },
+    { id: 2, text: "حرف كبير (A-Z)", met: /[A-Z]/.test(formData.password) },
+    { id: 3, text: "حرف صغير (a-z)", met: /[a-z]/.test(formData.password) }, // شرط جديد
+    { id: 4, text: "رقم واحد على الأقل (0-9)", met: /\d/.test(formData.password) },
+    { id: 5, text: "رمز خاص (@$!%*?&)", met: /[@$!%*?&]/.test(formData.password) }, // شرط جديد
   ];
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -52,28 +53,27 @@ const Signup = () => {
       ...prev,
       [id]: type === 'checkbox' ? checked : value
     }));
-    setErrorMessage(""); 
+    setErrorMessage("");
 
     if (id === "email") {
       setErrors((prev) => ({ ...prev, email: validateEmail(value) }));
     }
   };
 
-const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validate
     const emailError = validateEmail(formData.email);
+    // هذا يفحص كل الشروط في المصفوفة أعلاه تلقائياً
     const allRequirementsMet = passwordRequirements.every(req => req.met);
-    
-    // تنظيف المدخلات من المسافات الزائدة
+
     const cleanFirstName = formData.firstName.trim();
     const cleanLastName = formData.lastName.trim();
 
     if (emailError || !allRequirementsMet || !cleanFirstName || !cleanLastName || !formData.agreed) {
       setErrors({ email: emailError });
-      
-      // --- التعديل هنا: شروط أكثر دقة للاسم ---
+
       if (!cleanFirstName) {
         setErrorMessage("يرجى إدخال الاسم الأول");
       } else if (cleanFirstName.length < 2) {
@@ -82,10 +82,8 @@ const handleSubmit = async (e: React.FormEvent) => {
         setErrorMessage("يرجى إدخال الاسم الأخير");
       } else if (cleanLastName.length < 2) {
         setErrorMessage("الاسم الأخير يجب أن يكون حرفين على الأقل");
-      } 
-      // ----------------------------------------
-      
-      else if (!allRequirementsMet) setErrorMessage("كلمة المرور لا تستوفي المتطلبات");
+      }
+      else if (!allRequirementsMet) setErrorMessage("كلمة المرور لا تستوفي جميع الشروط الأمنية");
       else if (!formData.agreed) setErrorMessage("يجب الموافقة على الشروط والأحكام");
       return;
     }
@@ -94,26 +92,26 @@ const handleSubmit = async (e: React.FormEvent) => {
     setErrorMessage("");
 
     try {
-      const fullName = `${cleanFirstName} ${cleanLastName}`;
-      
+
+
       // Register
       await authService.register({
         email: formData.email,
         password: formData.password,
+
         firstName: cleanFirstName,
         lastName: cleanLastName,
       });
-      
-      // Show success toast
+
       toast.success('تم التسجيل!', 'تم إنشاء حسابك بنجاح. مرحباً بك!');
-      
-      // Auto login after registration
+
+      // Auto login
       await authService.login({
         email: formData.email,
         password: formData.password,
       });
-      
-      // Start countdown
+
+      // Countdown
       setShowCountdown(true);
       let timeLeft = 10;
       setCountdown(timeLeft);
@@ -127,7 +125,7 @@ const handleSubmit = async (e: React.FormEvent) => {
           navigate('/chat');
         }
       }, 1000);
-      
+
     } catch (error: any) {
       console.error("Registration error:", error);
       setErrorMessage(error.message || "فشل التسجيل");
@@ -182,7 +180,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                 </div>
               )}
 
-              {/* الاسم الأول والأخير - جنب بعض */}
+              {/* الاسم الأول والأخير */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-300 block" htmlFor="firstName">
@@ -261,7 +259,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                   </button>
                 </div>
 
-                {/* Password Requirements */}
+                {/* قائمة الشروط الجديدة */}
                 {isPasswordFocused && (
                   <div className="mt-2 space-y-1 animate-in fade-in slide-in-from-top-2 duration-200">
                     {passwordRequirements.map((req) => (

@@ -18,8 +18,10 @@ export const chatService = {
   },
 
   // ✅ التعديل هنا: حذفنا fileId لأنه غير مطلوب، الباك إند يعرفه من الـ chatId
-  sendMessage: async (chatId: string, content: string) => {
-    const response = await api.post(`/chats/${chatId}/messages`, { content });
+sendMessage: async (chatId: string, content: string, creativity: number) => {
+    // نحول القيمة من 0-100 إلى 0.0-1.0
+    const temperature = creativity / 100; 
+    const response = await api.post(`/chats/${chatId}/messages`, { content, temperature });
     return response.data;
   },
 
