@@ -1,16 +1,23 @@
-import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { authService } from '../services/authService';
-import { fileService } from '../services/fileService';
+import { fileService, FileItem } from '../services/fileService';
 import { chatService } from '../services/chatService';
-import { FaFileAlt, FaComments, FaEnvelope, FaDatabase, FaUpload, FaPlus, FaFolder, FaUser, FaSearch, FaCloudUploadAlt } from 'react-icons/fa';
+import { FaFileAlt, FaComments, FaEnvelope, FaDatabase, FaUpload, FaPlus, FaFolder, FaUser, FaSearch } from 'react-icons/fa';
 import SpotlightCard from './SpotlightCard';
 import TextPressure from '../src/component/TextPressure';
 import { Header } from './Header';
 
 export const UserDashboard = () => {
-  const navigate = useNavigate();
   const [user, setUser] = useState<any>(null);
+  const [recentFiles, setRecentFiles] = useState<FileItem[]>([]);
+  const [recentChats, setRecentChats] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // مرجع للتايمر للتحديث التلقائي
+  const pollingInterval = useRef<NodeJS.Timeout | null>(null);
+
   const [stats, setStats] = useState({
     totalFiles: 0,
     activeChats: 0,
@@ -18,29 +25,52 @@ export const UserDashboard = () => {
     storageUsed: 0
   });
 
-  const [recentFiles, setRecentFiles] = useState<any[]>([]);
-  const [recentChats, setRecentChats] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // 🔍 State للبحث
-  const [searchQuery, setSearchQuery] = useState('');
-
-  // 🖱️ State للسحب والإفلات
-  const [isDragging, setIsDragging] = useState(false);
-
   useEffect(() => {
     fetchDashboardData();
+    return () => {
+      if (pollingInterval.current) clearInterval(pollingInterval.current);
+    };
   }, []);
+
+  // مراقبة الملفات قيد المعالجة لتحديث حالتها
+  useEffect(() => {
+    const processingFiles = recentFiles.filter(f => f.status === 'processing');
+    if (processingFiles.length > 0) {
+      if (!pollingInterval.current) {
+        pollingInterval.current = setInterval(checkFileStatuses, 3000);
+      }
+    } else {
+      if (pollingInterval.current) {
+        clearInterval(pollingInterval.current);
+        pollingInterval.current = null;
+      }
+    }
+  }, [recentFiles]);
+
+  const checkFileStatuses = async () => {
+    const processingFiles = recentFiles.filter(f => f.status === 'processing');
+    for (const file of processingFiles) {
+      try {
+        const { status } = await fileService.getFileStatus(file.id);
+        if (status !== 'processing') {
+          setRecentFiles(prev => prev.map(f => 
+            f.id === file.id ? { ...f, status: status as any } : f
+          ));
+        }
+      } catch (error) {
+        console.error(`Error checking status for ${file.id}`, error);
+      }
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
       const [userData, filesRaw, chatsRaw] = await Promise.all([
         authService.getCurrentUser(),
-        fileService.getFiles().catch(() => []),
+        fileService.getFiles().catch(() => ({ items: [] })),
         chatService.getChats().catch(() => [])
       ]);
 
-      // 👇 التعديل: الباك إند الجديد يرسل المصفوفة باسم items
       const filesData = (filesRaw as any)?.items || [];
       const chatsData = Array.isArray(chatsRaw) ? chatsRaw : (chatsRaw as any)?.items || [];
 
@@ -57,8 +87,8 @@ export const UserDashboard = () => {
         storageUsed: Math.round(storagePercentage)
       });
 
-      setRecentFiles(filesData); // نحفظ الكل هنا لنتمكن من البحث
-      setRecentChats(chatsData); // نحفظ الكل هنا لنتمكن من البحث
+      setRecentFiles(filesData);
+      setRecentChats(chatsData);
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -67,7 +97,6 @@ export const UserDashboard = () => {
     }
   };
 
-  // 🌅 دالة التحية حسب الوقت
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'صباح الخير';
@@ -75,36 +104,13 @@ export const UserDashboard = () => {
     return 'سهرة سعيدة';
   };
 
-  // 🖱️ دوال السحب والإفلات
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const file = e.dataTransfer.files[0];
-      // نرسل الملف إلى صفحة المحادثة عبر الـ state
-      navigate('/chat', { state: { droppedFile: file } });
-    }
-  };
-
-  // 🔍 تصفية البيانات بناءً على البحث
-  const filteredFiles = recentFiles.filter(f =>
+  const filteredFiles = recentFiles.filter(f => 
     f.originalFilename.toLowerCase().includes(searchQuery.toLowerCase())
-  ).slice(0, 3); // نعرض 3 فقط
+  ).slice(0, 3);
 
-  const filteredChats = recentChats.filter(c =>
+  const filteredChats = recentChats.filter(c => 
     (c.title || '').toLowerCase().includes(searchQuery.toLowerCase())
-  ).slice(0, 3); // نعرض 3 فقط
+  ).slice(0, 3);
 
   if (isLoading) {
     return (
@@ -121,31 +127,16 @@ export const UserDashboard = () => {
 
   return (
     <div className="w-full min-h-screen bg-transparent relative flex flex-col">
-
-      {/* 👇 إضافة الهيدر هنا في الأعلى */}
+      
+      {/* الهيدر */}
       <div className="pt-4 flex justify-center px-4 relative z-50">
-        <Header />
+         <Header />
       </div>
 
-      <section
-        className="flex-1 flex flex-col items-center justify-center px-4 py-8 relative"
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        {/* 🟦 Drag & Drop Overlay */}
-        {isDragging && (
-          <div className="fixed inset-0 z-50 bg-[#2873ec]/20 backdrop-blur-sm border-4 border-[#2873ec] border-dashed rounded-xl m-4 flex items-center justify-center pointer-events-none animate-pulse">
-            <div className="text-center">
-              <FaCloudUploadAlt className="text-[#2873ec] text-6xl mx-auto mb-4" />
-              <h2 className="text-3xl font-bold text-white">أفلت الملف هنا للرفع الفوري</h2>
-            </div>
-          </div>
-        )}
-
+      <section className="flex-1 flex flex-col items-center justify-center px-4 py-8 relative">
         <div className="w-full max-w-6xl mx-auto z-10">
 
-          {/* Welcome Message with Dynamic Greeting */}
+          {/* الترحيب */}
           <div className="text-center mb-8" dir="rtl">
             <h1 className="text-white font-bold text-4xl md:text-5xl lg:text-6xl mb-4 flex flex-wrap items-baseline justify-center gap-x-3 gap-y-2">
               <span>{getGreeting()}،</span>
@@ -168,28 +159,26 @@ export const UserDashboard = () => {
               <span dir="ltr">! 👋</span>
             </h1>
             <p className="text-gray-300 text-lg md:text-xl">
-              إليك ملخص نشاطك اليوم
+               إليك ملخص نشاطك اليوم
             </p>
           </div>
 
-          {/* 🔍 Search Bar */}
+          {/* شريط البحث */}
           <div className="w-full max-w-2xl mx-auto mb-12 relative group">
             <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
               <FaSearch className="text-gray-400 group-focus-within:text-[#2873ec] transition-colors" />
             </div>
-            <input
-              type="text"
-              placeholder="ابحث عن ملف أو محادثة..."
+            <input 
+              type="text" 
+              placeholder="ابحث عن ملف أو محادثة..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-gray-900/60 backdrop-blur-xl border border-white/10 rounded-2xl py-4 pr-12 pl-4 text-white placeholder-gray-500 focus:outline-none focus:border-[#2873ec]/50 focus:shadow-[0_0_20px_rgba(40,115,236,0.2)] transition-all text-right"
             />
           </div>
 
-          {/* Stats Cards */}
+          {/* بطاقات الإحصائيات */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-
-            {/* Total Files */}
             <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)">
               <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20 shadow-[0_0_20px_rgba(40,115,236,0.1)] hover:shadow-[0_0_30px_rgba(40,115,236,0.2)] transition-all duration-300 h-full">
                 <div className="flex items-center justify-between mb-4">
@@ -202,7 +191,6 @@ export const UserDashboard = () => {
               </div>
             </SpotlightCard>
 
-            {/* Active Chats */}
             <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)">
               <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20 shadow-[0_0_20px_rgba(40,115,236,0.1)] hover:shadow-[0_0_30px_rgba(40,115,236,0.2)] transition-all duration-300 h-full">
                 <div className="flex items-center justify-between mb-4">
@@ -215,7 +203,6 @@ export const UserDashboard = () => {
               </div>
             </SpotlightCard>
 
-            {/* Total Messages */}
             <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)">
               <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20 shadow-[0_0_20px_rgba(40,115,236,0.1)] hover:shadow-[0_0_30px_rgba(40,115,236,0.2)] transition-all duration-300 h-full">
                 <div className="flex items-center justify-between mb-4">
@@ -228,7 +215,6 @@ export const UserDashboard = () => {
               </div>
             </SpotlightCard>
 
-            {/* 📊 Storage Used (Updated Visuals) */}
             <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)" className='rounded-3xl'>
               <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20 shadow-[0_0_20px_rgba(40,115,236,0.1)] hover:shadow-[0_0_30px_rgba(40,115,236,0.2)] transition-all duration-300 h-full flex flex-col justify-between">
                 <div className="flex items-center justify-between mb-2">
@@ -237,19 +223,19 @@ export const UserDashboard = () => {
                   </div>
                   <span className="text-2xl font-bold text-white" dir="ltr">{stats.storageUsed}%</span>
                 </div>
-
+                
                 <div>
                   <div className="flex justify-between text-xs text-gray-400 mb-2 px-1">
                     <span>المستخدم</span>
                     <span dir="ltr">1 GB Max</span>
                   </div>
-                  {/* Visual Progress Bar */}
                   <div className="w-full bg-gray-700/50 rounded-full h-3 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-1000 ease-out ${stats.storageUsed > 90 ? 'bg-gradient-to-r from-red-500 to-red-600' :
-                          stats.storageUsed > 60 ? 'bg-gradient-to-r from-yellow-500 to-orange-500' :
-                            'bg-gradient-to-r from-green-400 to-[#2873ec]'
-                        }`}
+                    <div 
+                      className={`h-full rounded-full transition-all duration-1000 ease-out ${
+                        stats.storageUsed > 90 ? 'bg-gradient-to-r from-red-500 to-red-600' : 
+                        stats.storageUsed > 60 ? 'bg-gradient-to-r from-yellow-500 to-orange-500' : 
+                        'bg-gradient-to-r from-green-400 to-[#2873ec]'
+                      }`} 
                       style={{ width: `${stats.storageUsed}%` }}
                     />
                   </div>
@@ -258,7 +244,7 @@ export const UserDashboard = () => {
             </SpotlightCard>
           </div>
 
-          {/* Quick Actions */}
+          {/* الإجراءات السريعة */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
             <Link
               to="/chat"
@@ -299,9 +285,8 @@ export const UserDashboard = () => {
             </SpotlightCard>
           </div>
 
-          {/* Recent Activity (Filtered by Search) */}
+          {/* آخر النشاطات */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Recent Files */}
             <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20">
               <h3 className="text-white font-bold text-xl mb-4 flex items-center gap-2">
                 <FaFileAlt className="text-[#2873ec]" />
@@ -322,12 +307,13 @@ export const UserDashboard = () => {
                             {new Date(file.createdAt).toLocaleDateString('ar-EG')}
                           </p>
                         </div>
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium mr-2 whitespace-nowrap ${file.status === 'completed' ? 'bg-green-500/20 text-green-400' :
-                            file.status === 'processing' ? 'bg-yellow-500/20 text-yellow-400' :
-                              'bg-red-500/20 text-red-400'
-                          }`}>
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium mr-2 whitespace-nowrap ${
+                          file.status === 'completed' ? 'bg-green-500/20 text-green-400' :
+                          file.status === 'processing' ? 'bg-yellow-500/20 text-yellow-400 animate-pulse' :
+                          'bg-red-500/20 text-red-400'
+                        }`}>
                           {file.status === 'completed' ? 'مكتمل' :
-                            file.status === 'processing' ? 'قيد المعالجة' : 'خطأ'}
+                           file.status === 'processing' ? 'قيد المعالجة' : 'خطأ'}
                         </span>
                       </div>
                     </div>
@@ -349,7 +335,6 @@ export const UserDashboard = () => {
               )}
             </div>
 
-            {/* Recent Chats */}
             <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20">
               <h3 className="text-white font-bold text-xl mb-4 flex items-center gap-2">
                 <FaComments className="text-[#2873ec]" />
