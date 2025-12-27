@@ -24,6 +24,8 @@ router.put(
   userController.updateProfileImage
 );
 
+router.delete('/profile-image', userController.deleteProfileImage);
+
 router.put(
   '/password', 
   validate(ChangePasswordSchema), 
@@ -31,5 +33,7 @@ router.put(
 );
 
 router.delete('/account', userController.deleteAccount);
+
+router.get('/export-data', userController.exportData);
 
 export default router;

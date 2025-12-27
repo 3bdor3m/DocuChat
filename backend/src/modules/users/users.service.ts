@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+// ❌ تم حذف axios لأنه غير مطلوب هنا
 import { AppError } from '../../common/utils/AppError.js';
 import { hashPassword, comparePassword } from '../../common/utils/password.js';
 import { UpdateProfileDto, ChangePasswordDto } from './users.schema.js';
@@ -37,11 +38,54 @@ export class UserService {
     });
   }
 
+  // backend/src/modules/users/users.service.ts
+
+  // 👇 دالة جديدة لتصدير بيانات المستخدم
+  async exportUserData(userId: string) {
+    // نجلب المستخدم مع علاقاته (إذا كانت موجودة في قاعدة البيانات)
+    // هنا نجلب البيانات الأساسية، ويمكنك إضافة files: true أو chats: true إذا أردت تصدير كل شيء
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        createdAt: true,
+        subscriptionTier: true,
+        // يمكنك إضافة جداول أخرى هنا إذا كانت علاقات Prisma معرفة
+        files: { select: { filename: true, createdAt: true } },
+        chats: { select: { title: true, createdAt: true } }
+      }
+    });
+
+    if (!user) throw new AppError('المستخدم غير موجود', 404);
+    return user;
+  }
+
+  // 🔥🔥🔥 التعديل الجذري هنا 🔥🔥🔥
   // تحديث الصورة الشخصية
-  async updateProfileImage(userId: string, imageUrl: string) {
+  async updateProfileImage(userId: string, base64Image: string) {
+    // نستخدم Prisma للتعامل مع الداتا بيس مباشرة
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        profileImage: base64Image, // حفظ النص القادم من الفرونت إند
+      },
+      select: {
+        id: true,
+        fullName: true,
+        profileImage: true, // نرجع الصورة الجديدة للتأكيد
+      },
+    });
+
+    return updatedUser;
+  }
+
+  async deleteProfileImage(userId: string) {
     return await prisma.user.update({
       where: { id: userId },
-      data: { profileImage: imageUrl },
+      data: { profileImage: null }, // نجعل القيمة null في قاعدة البيانات
+      select: { id: true, profileImage: true },
     });
   }
 
@@ -75,7 +119,7 @@ export class UserService {
   }
 
   // حذف الحساب
-  async deleteAccount(userId: string) {
+  async deleteAccount(userId: string, password: any) {
     await prisma.user.delete({ where: { id: userId } });
   }
 }

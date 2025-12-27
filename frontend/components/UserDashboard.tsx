@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { fileService } from '../services/fileService';
 import { chatService } from '../services/chatService';
-import { FaFileAlt, FaComments, FaEnvelope, FaDatabase, FaUpload, FaPlus, FaFolder, FaUser } from 'react-icons/fa';
+import { FaFileAlt, FaComments, FaEnvelope, FaDatabase, FaUpload, FaPlus, FaFolder, FaUser, FaSearch, FaCloudUploadAlt } from 'react-icons/fa';
 import SpotlightCard from './SpotlightCard';
 import TextPressure from '../src/component/TextPressure';
+import { Header } from './Header';
 
 export const UserDashboard = () => {
+  const navigate = useNavigate();
   const [user, setUser] = useState<any>(null);
   const [stats, setStats] = useState({
     totalFiles: 0,
@@ -15,9 +17,16 @@ export const UserDashboard = () => {
     totalMessages: 0,
     storageUsed: 0
   });
+
   const [recentFiles, setRecentFiles] = useState<any[]>([]);
   const [recentChats, setRecentChats] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // 🔍 State للبحث
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // 🖱️ State للسحب والإفلات
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
@@ -31,12 +40,12 @@ export const UserDashboard = () => {
         chatService.getChats().catch(() => [])
       ]);
 
-      const filesData = Array.isArray(filesRaw) ? filesRaw : (filesRaw as any)?.files || [];
+      // 👇 التعديل: الباك إند الجديد يرسل المصفوفة باسم items
+      const filesData = (filesRaw as any)?.items || [];
       const chatsData = Array.isArray(chatsRaw) ? chatsRaw : (chatsRaw as any)?.items || [];
 
       setUser(userData);
 
-      // حساب الإحصائيات
       const totalMessages = chatsData.reduce((sum: number, chat: any) => sum + (chat.messages?.length || 0), 0);
       const storageUsed = filesData.reduce((sum: number, file: any) => sum + Number(file.fileSize || 0), 0);
       const storagePercentage = Math.min((storageUsed / (1024 * 1024 * 1024)) * 100, 100);
@@ -48,8 +57,8 @@ export const UserDashboard = () => {
         storageUsed: Math.round(storagePercentage)
       });
 
-      setRecentFiles(filesData.slice(0, 3));
-      setRecentChats(chatsData.slice(0, 3));
+      setRecentFiles(filesData); // نحفظ الكل هنا لنتمكن من البحث
+      setRecentChats(chatsData); // نحفظ الكل هنا لنتمكن من البحث
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -57,6 +66,45 @@ export const UserDashboard = () => {
       setIsLoading(false);
     }
   };
+
+  // 🌅 دالة التحية حسب الوقت
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'صباح الخير';
+    if (hour < 18) return 'مساء الخير';
+    return 'سهرة سعيدة';
+  };
+
+  // 🖱️ دوال السحب والإفلات
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      // نرسل الملف إلى صفحة المحادثة عبر الـ state
+      navigate('/chat', { state: { droppedFile: file } });
+    }
+  };
+
+  // 🔍 تصفية البيانات بناءً على البحث
+  const filteredFiles = recentFiles.filter(f =>
+    f.originalFilename.toLowerCase().includes(searchQuery.toLowerCase())
+  ).slice(0, 3); // نعرض 3 فقط
+
+  const filteredChats = recentChats.filter(c =>
+    (c.title || '').toLowerCase().includes(searchQuery.toLowerCase())
+  ).slice(0, 3); // نعرض 3 فقط
 
   if (isLoading) {
     return (
@@ -72,235 +120,284 @@ export const UserDashboard = () => {
   const firstName = user?.firstName || user?.fullName?.split(' ')[0] || 'مستخدم';
 
   return (
-    <section className="flex-1 flex flex-col items-center justify-center px-4 py-12 min-h-screen bg-transparent">
-      <div className="w-full max-w-6xl mx-auto">
+    <div className="w-full min-h-screen bg-transparent relative flex flex-col">
 
-        {/* Welcome Message */}
-        {/* إضافة dir="rtl" للحاوية الرئيسية لضمان الترتيب الصحيح */}
-        <div className="text-center mb-12" dir="rtl">
-          {/* استخدمنا flex-wrap للسماح بالالتفاف في الشاشات الصغيرة، و items-baseline لمحاذاة النصوص */}
-          <h1 className="text-white font-bold text-4xl md:text-5xl lg:text-6xl mb-4 flex flex-wrap items-baseline justify-center gap-x-3 gap-y-2">
-            <span>مرحباً بعودتك،</span>
+      {/* 👇 إضافة الهيدر هنا في الأعلى */}
+      <div className="pt-4 flex justify-center px-4 relative z-50">
+        <Header />
+      </div>
 
-            {/* 👇 التعديل الجذري هنا 👇 */}
-            {/* أزلنا inline-block والارتفاع الثابت. تركنا فقط dir="ltr" لعزل الاسم */}
-            <span dir="ltr" className="relative">
-              <TextPressure
-                text={firstName}
-                flex={false}     // غيرناه لـ false لكي لا يحاول التمدد ويأخذ حجمه الطبيعي
-                alpha={false}
-                stroke={false}
-                width={false}    // غيرناه لـ false أيضاً
-                weight={true}
-                italic={true}
-                auto={true}
-                autoSpeed={1}
-                textColor="#2873ec"
-                strokeColor="#ff0000"
-                minFontSize={100} // حجم خط مناسب ليكون بارزاً
-              />
-            </span>
-
-            {/* عزلنا علامة التعجب والإيموجي لضمان ظهورهم في النهاية بشكل صحيح */}
-            <span dir="ltr">! 👋</span>
-          </h1>
-          <p className="text-gray-300 text-lg md:text-xl">
-            إليك ملخص نشاطك اليوم
-          </p>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-
-          {/* Total Files */}
-          <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)">
-            <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20 shadow-[0_0_20px_rgba(40,115,236,0.1)] hover:shadow-[0_0_30px_rgba(40,115,236,0.2)] transition-all duration-300 h-full">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-blue-500/10 p-3 rounded-lg">
-                  <FaFileAlt className="text-blue-400 text-2xl" />
-                </div>
-                <span className="text-3xl font-bold text-white">{stats.totalFiles}</span>
-              </div>
-              <h3 className="text-gray-400 text-sm">إجمالي الملفات</h3>
+      <section
+        className="flex-1 flex flex-col items-center justify-center px-4 py-8 relative"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {/* 🟦 Drag & Drop Overlay */}
+        {isDragging && (
+          <div className="fixed inset-0 z-50 bg-[#2873ec]/20 backdrop-blur-sm border-4 border-[#2873ec] border-dashed rounded-xl m-4 flex items-center justify-center pointer-events-none animate-pulse">
+            <div className="text-center">
+              <FaCloudUploadAlt className="text-[#2873ec] text-6xl mx-auto mb-4" />
+              <h2 className="text-3xl font-bold text-white">أفلت الملف هنا للرفع الفوري</h2>
             </div>
-          </SpotlightCard>
+          </div>
+        )}
 
-          {/* Active Chats */}
-          <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)">
-            <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20 shadow-[0_0_20px_rgba(40,115,236,0.1)] hover:shadow-[0_0_30px_rgba(40,115,236,0.2)] transition-all duration-300 h-full">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-green-500/10 p-3 rounded-lg">
-                  <FaComments className="text-green-400 text-2xl" />
-                </div>
-                <span className="text-3xl font-bold text-white">{stats.activeChats}</span>
-              </div>
-              <h3 className="text-gray-400 text-sm">المحادثات النشطة</h3>
+        <div className="w-full max-w-6xl mx-auto z-10">
+
+          {/* Welcome Message with Dynamic Greeting */}
+          <div className="text-center mb-8" dir="rtl">
+            <h1 className="text-white font-bold text-4xl md:text-5xl lg:text-6xl mb-4 flex flex-wrap items-baseline justify-center gap-x-3 gap-y-2">
+              <span>{getGreeting()}،</span>
+              <span dir="ltr" className="relative">
+                <TextPressure
+                  text={firstName}
+                  flex={false}
+                  alpha={false}
+                  stroke={false}
+                  width={false}
+                  weight={true}
+                  italic={true}
+                  auto={true}
+                  autoSpeed={1}
+                  textColor="#2873ec"
+                  strokeColor="#ff0000"
+                  minFontSize={100}
+                />
+              </span>
+              <span dir="ltr">! 👋</span>
+            </h1>
+            <p className="text-gray-300 text-lg md:text-xl">
+              إليك ملخص نشاطك اليوم
+            </p>
+          </div>
+
+          {/* 🔍 Search Bar */}
+          <div className="w-full max-w-2xl mx-auto mb-12 relative group">
+            <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+              <FaSearch className="text-gray-400 group-focus-within:text-[#2873ec] transition-colors" />
             </div>
-          </SpotlightCard>
+            <input
+              type="text"
+              placeholder="ابحث عن ملف أو محادثة..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-gray-900/60 backdrop-blur-xl border border-white/10 rounded-2xl py-4 pr-12 pl-4 text-white placeholder-gray-500 focus:outline-none focus:border-[#2873ec]/50 focus:shadow-[0_0_20px_rgba(40,115,236,0.2)] transition-all text-right"
+            />
+          </div>
 
-          {/* Total Messages */}
-          <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)">
-            <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20 shadow-[0_0_20px_rgba(40,115,236,0.1)] hover:shadow-[0_0_30px_rgba(40,115,236,0.2)] transition-all duration-300 h-full">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-purple-500/10 p-3 rounded-lg">
-                  <FaEnvelope className="text-purple-400 text-2xl" />
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+
+            {/* Total Files */}
+            <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)">
+              <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20 shadow-[0_0_20px_rgba(40,115,236,0.1)] hover:shadow-[0_0_30px_rgba(40,115,236,0.2)] transition-all duration-300 h-full">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="bg-blue-500/10 p-3 rounded-lg">
+                    <FaFileAlt className="text-blue-400 text-2xl" />
+                  </div>
+                  <span className="text-3xl font-bold text-white">{stats.totalFiles}</span>
                 </div>
-                <span className="text-3xl font-bold text-white">{stats.totalMessages}</span>
+                <h3 className="text-gray-400 text-sm">إجمالي الملفات</h3>
               </div>
-              <h3 className="text-gray-400 text-sm">إجمالي الرسائل</h3>
-            </div>
-          </SpotlightCard>
+            </SpotlightCard>
 
-          {/* Storage Used */}
-          <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)" className='rounded-3xl'>
-            <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20 shadow-[0_0_20px_rgba(40,115,236,0.1)] hover:shadow-[0_0_30px_rgba(40,115,236,0.2)] transition-all duration-300 h-full">
-              <div className="flex items-center justify-between mb-4">
-                <div className="bg-orange-500/10 p-3 rounded-lg">
-                  <FaDatabase className="text-orange-400 text-2xl" />
+            {/* Active Chats */}
+            <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)">
+              <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20 shadow-[0_0_20px_rgba(40,115,236,0.1)] hover:shadow-[0_0_30px_rgba(40,115,236,0.2)] transition-all duration-300 h-full">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="bg-green-500/10 p-3 rounded-lg">
+                    <FaComments className="text-green-400 text-2xl" />
+                  </div>
+                  <span className="text-3xl font-bold text-white">{stats.activeChats}</span>
                 </div>
-                <span className="text-3xl font-bold text-white">{stats.storageUsed}%</span>
+                <h3 className="text-gray-400 text-sm">المحادثات النشطة</h3>
               </div>
-              <h3 className="text-gray-400 text-sm">التخزين (1GB Max)</h3>
-            </div>
-          </SpotlightCard>
-        </div>
+            </SpotlightCard>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
-          <Link
-            to="/chat"
-            className="bg-linear-to-br from-[#2873ec] to-[#4a8fff] rounded-xl p-6 text-center hover:scale-105 transition-transform duration-300 shadow-[0_0_20px_rgba(40,115,236,0.3)]"
-          >
-            <FaUpload className="text-white text-3xl mx-auto mb-3" />
-            <span className="text-white font-bold">رفع ملف جديد</span>
-          </Link>
+            {/* Total Messages */}
+            <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)">
+              <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20 shadow-[0_0_20px_rgba(40,115,236,0.1)] hover:shadow-[0_0_30px_rgba(40,115,236,0.2)] transition-all duration-300 h-full">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="bg-purple-500/10 p-3 rounded-lg">
+                    <FaEnvelope className="text-purple-400 text-2xl" />
+                  </div>
+                  <span className="text-3xl font-bold text-white">{stats.totalMessages}</span>
+                </div>
+                <h3 className="text-gray-400 text-sm">إجمالي الرسائل</h3>
+              </div>
+            </SpotlightCard>
 
-          <Link
-            to="/chat"
-            state={{ newChat: true }}
-            className="bg-gray-900/50 backdrop-blur-md border border-[#2873ec]/20 rounded-xl p-6 text-center hover:scale-105 transition-transform duration-300"
-          >
-            <FaPlus className="text-[#2873ec] text-3xl mx-auto mb-3" />
-            <span className="text-white font-bold">بدء محادثة</span>
-          </Link>
+            {/* 📊 Storage Used (Updated Visuals) */}
+            <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)" className='rounded-3xl'>
+              <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20 shadow-[0_0_20px_rgba(40,115,236,0.1)] hover:shadow-[0_0_30px_rgba(40,115,236,0.2)] transition-all duration-300 h-full flex flex-col justify-between">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="bg-orange-500/10 p-3 rounded-lg">
+                    <FaDatabase className="text-orange-400 text-2xl" />
+                  </div>
+                  <span className="text-2xl font-bold text-white" dir="ltr">{stats.storageUsed}%</span>
+                </div>
 
-          {/* 🔥 تم إضافة SpotlightCard هنا لـ "ملفاتي" */}
-          <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)">
+                <div>
+                  <div className="flex justify-between text-xs text-gray-400 mb-2 px-1">
+                    <span>المستخدم</span>
+                    <span dir="ltr">1 GB Max</span>
+                  </div>
+                  {/* Visual Progress Bar */}
+                  <div className="w-full bg-gray-700/50 rounded-full h-3 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-1000 ease-out ${stats.storageUsed > 90 ? 'bg-gradient-to-r from-red-500 to-red-600' :
+                          stats.storageUsed > 60 ? 'bg-gradient-to-r from-yellow-500 to-orange-500' :
+                            'bg-gradient-to-r from-green-400 to-[#2873ec]'
+                        }`}
+                      style={{ width: `${stats.storageUsed}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </SpotlightCard>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
             <Link
               to="/chat"
-              // تمت إزالة hover:scale-105 وإضافة h-full w-full block
-              className="bg-gray-900/50 backdrop-blur-md border border-[#2873ec]/20 rounded-xl p-6 text-center h-full w-full block"
+              className="bg-linear-to-br from-[#2873ec] to-[#4a8fff] rounded-xl p-6 text-center hover:scale-105 transition-transform duration-300 shadow-[0_0_20px_rgba(40,115,236,0.3)] relative overflow-hidden group"
             >
-              <FaFolder className="text-[#2873ec] text-3xl mx-auto mb-3" />
-              <span className="text-white font-bold">ملفاتي</span>
+              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+              <FaUpload className="text-white text-3xl mx-auto mb-3 relative z-10" />
+              <span className="text-white font-bold relative z-10">رفع ملف جديد</span>
             </Link>
-          </SpotlightCard>
 
-          {/* 🔥 تم إضافة SpotlightCard هنا لـ "حسابي" */}
-          <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)">
             <Link
-              to="/account"
-              // تمت إزالة hover:scale-105 وإضافة h-full w-full block
-              className="bg-gray-900/50 backdrop-blur-md border border-[#2873ec]/20 rounded-xl p-6 text-center h-full w-full block"
+              to="/chat"
+              state={{ newChat: true }}
+              className="bg-gray-900/50 backdrop-blur-md border border-[#2873ec]/20 rounded-xl p-6 text-center hover:scale-105 transition-transform duration-300 group"
             >
-              <FaUser className="text-[#2873ec] text-3xl mx-auto mb-3" />
-              <span className="text-white font-bold">حسابي</span>
+              <FaPlus className="text-[#2873ec] text-3xl mx-auto mb-3 group-hover:rotate-90 transition-transform duration-300" />
+              <span className="text-white font-bold">بدء محادثة</span>
             </Link>
-          </SpotlightCard>
-        </div>
 
-        {/* Recent Activity */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Recent Files */}
-          <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20">
-            <h3 className="text-white font-bold text-xl mb-4 flex items-center gap-2">
-              <FaFileAlt className="text-[#2873ec]" />
-              آخر الملفات
-            </h3>
-
-            {recentFiles.length > 0 ? (
-              <div className="space-y-3">
-                {recentFiles.map((file) => (
-                  <div
-                    key={file.id}
-                    className="bg-gray-800/30 rounded-lg p-4 hover:bg-gray-800/50 transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white font-medium truncate">{file.originalFilename}</p>
-                        <p className="text-gray-400 text-sm">
-                          {new Date(file.createdAt).toLocaleDateString('ar-EG')}
-                        </p>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium mr-2 whitespace-nowrap ${file.status === 'completed' ? 'bg-green-500/20 text-green-400' :
-                        file.status === 'processing' ? 'bg-yellow-500/20 text-yellow-400' :
-                          'bg-red-500/20 text-red-400'
-                        }`}>
-                        {file.status === 'completed' ? 'مكتمل' :
-                          file.status === 'processing' ? 'قيد المعالجة' : 'خطأ'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-400 text-center py-8">لا توجد ملفات بعد</p>
-            )}
-
-            {recentFiles.length > 0 && (
+            <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)">
               <Link
                 to="/chat"
-                className="block text-center text-[#2873ec] hover:text-[#4a8fff] font-medium mt-4 transition-colors"
+                className="bg-gray-900/50 backdrop-blur-md border border-[#2873ec]/20 rounded-xl p-6 text-center h-full w-full block hover:bg-[#2873ec]/5 transition-colors"
               >
-                عرض الكل →
+                <FaFolder className="text-[#2873ec] text-3xl mx-auto mb-3" />
+                <span className="text-white font-bold">ملفاتي</span>
               </Link>
-            )}
+            </SpotlightCard>
+
+            <SpotlightCard spotlightColor="rgba(40, 115, 236, 0.8)">
+              <Link
+                to="/account"
+                className="bg-gray-900/50 backdrop-blur-md border border-[#2873ec]/20 rounded-xl p-6 text-center h-full w-full block hover:bg-[#2873ec]/5 transition-colors"
+              >
+                <FaUser className="text-[#2873ec] text-3xl mx-auto mb-3" />
+                <span className="text-white font-bold">حسابي</span>
+              </Link>
+            </SpotlightCard>
           </div>
 
-          {/* Recent Chats */}
-          <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20">
-            <h3 className="text-white font-bold text-xl mb-4 flex items-center gap-2">
-              <FaComments className="text-[#2873ec]" />
-              آخر المحادثات
-            </h3>
+          {/* Recent Activity (Filtered by Search) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Recent Files */}
+            <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20">
+              <h3 className="text-white font-bold text-xl mb-4 flex items-center gap-2">
+                <FaFileAlt className="text-[#2873ec]" />
+                {searchQuery ? 'نتائج البحث في الملفات' : 'آخر الملفات'}
+              </h3>
 
-            {recentChats.length > 0 ? (
-              <div className="space-y-3">
-                {recentChats.map((chat) => (
-                  <Link
-                    key={chat.id}
-                    to={`/chat?id=${chat.id}`}
-                    className="block bg-gray-800/30 rounded-lg p-4 hover:bg-gray-800/50 transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white font-medium truncate">{chat.title || 'محادثة جديدة'}</p>
-                        <p className="text-gray-400 text-sm">
-                          {new Date(chat.updatedAt).toLocaleDateString('ar-EG')}
-                        </p>
+              {filteredFiles.length > 0 ? (
+                <div className="space-y-3">
+                  {filteredFiles.map((file) => (
+                    <div
+                      key={file.id}
+                      className="bg-gray-800/30 rounded-lg p-4 hover:bg-gray-800/50 transition-colors border border-transparent hover:border-[#2873ec]/30"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-medium truncate">{file.originalFilename}</p>
+                          <p className="text-gray-400 text-sm">
+                            {new Date(file.createdAt).toLocaleDateString('ar-EG')}
+                          </p>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium mr-2 whitespace-nowrap ${file.status === 'completed' ? 'bg-green-500/20 text-green-400' :
+                            file.status === 'processing' ? 'bg-yellow-500/20 text-yellow-400' :
+                              'bg-red-500/20 text-red-400'
+                          }`}>
+                          {file.status === 'completed' ? 'مكتمل' :
+                            file.status === 'processing' ? 'قيد المعالجة' : 'خطأ'}
+                        </span>
                       </div>
-                      <span className="text-[#2873ec] text-sm mr-2 whitespace-nowrap">
-                        {chat.messages?.length || 0} رسالة
-                      </span>
                     </div>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-400 text-center py-8">لا توجد محادثات بعد</p>
-            )}
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-400 text-center py-8">
+                  {searchQuery ? 'لا توجد ملفات تطابق بحثك' : 'لا توجد ملفات بعد'}
+                </p>
+              )}
 
-            {recentChats.length > 0 && (
-              <Link
-                to="/chat"
-                className="block text-center text-[#2873ec] hover:text-[#4a8fff] font-medium mt-4 transition-colors"
-              >
-                عرض الكل →
-              </Link>
-            )}
+              {!searchQuery && recentFiles.length > 0 && (
+                <Link
+                  to="/chat"
+                  className="block text-center text-[#2873ec] hover:text-[#4a8fff] font-medium mt-4 transition-colors"
+                >
+                  عرض الكل →
+                </Link>
+              )}
+            </div>
+
+            {/* Recent Chats */}
+            <div className="bg-gray-900/50 backdrop-blur-md rounded-2xl p-6 border border-[#2873ec]/20">
+              <h3 className="text-white font-bold text-xl mb-4 flex items-center gap-2">
+                <FaComments className="text-[#2873ec]" />
+                {searchQuery ? 'نتائج البحث في المحادثات' : 'آخر المحادثات'}
+              </h3>
+
+              {filteredChats.length > 0 ? (
+                <div className="space-y-3">
+                  {filteredChats.map((chat) => (
+                    <Link
+                      key={chat.id}
+                      to={`/chat?id=${chat.id}`}
+                      className="block bg-gray-800/30 rounded-lg p-4 hover:bg-gray-800/50 transition-colors border border-transparent hover:border-[#2873ec]/30"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-medium truncate">{chat.title || 'محادثة جديدة'}</p>
+                          <p className="text-gray-400 text-sm">
+                            {new Date(chat.updatedAt).toLocaleDateString('ar-EG')}
+                          </p>
+                        </div>
+                        <span className="text-[#2873ec] text-sm mr-2 whitespace-nowrap bg-[#2873ec]/10 px-2 py-1 rounded-md">
+                          {chat.messages?.length || 0} رسالة
+                        </span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-400 text-center py-8">
+                  {searchQuery ? 'لا توجد محادثات تطابق بحثك' : 'لا توجد محادثات بعد'}
+                </p>
+              )}
+
+              {!searchQuery && recentChats.length > 0 && (
+                <Link
+                  to="/chat"
+                  className="block text-center text-[#2873ec] hover:text-[#4a8fff] font-medium mt-4 transition-colors"
+                >
+                  عرض الكل →
+                </Link>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
   );
 };
+
+export default UserDashboard;

@@ -2,9 +2,9 @@ import api from '../config/api';
 
 export const userService = {
   // تحديث الملف الشخصي
-  updateProfile: async (data: { firstName: string; lastName: string }) => {
+updateProfile: async (data: { firstName: string; lastName: string }) => {
     const response = await api.put('/users/profile', data);
-    return response.data;
+    return response.data.data; 
   },
 
   // تحديث صورة البروفايل
@@ -29,10 +29,15 @@ export const userService = {
   },
 
   // حذف الحساب
-  deleteAccount: async (password: string) => {
+  deleteAccount: async (password: string, reason: string) => {
     const response = await api.delete('/users/delete-account', {
-      data: { password }, // في طلبات DELETE، البادئ يرسل داخل data
+      data: { password, reason }, // نرسل السبب مع كلمة المرور
     });
+    return response.data;
+  },
+
+  deleteProfileImage: async () => {
+    const response = await api.delete('/users/profile-image');
     return response.data;
   },
 };

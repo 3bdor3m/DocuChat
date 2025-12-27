@@ -11,12 +11,14 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 // استخدام lazy لتحميل المكونات عند الحاجة
 const Home = lazy(() => import('./pages/Home'));
 const Chat = lazy(() => import('./pages/Chat'));
-const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Pricing = lazy(() => import('./pages/Pricing'));
 const Signup = lazy(() => import('./pages/Signup'));
 const Login = lazy(() => import('./pages/Login'));
 const Account = lazy(() => import('./pages/Account'));
 const NotFound = lazy(() => import('./pages/NotFound'));
+
+// مكون الداشبورد الجديد
+const UserDashboard = lazy(() => import('./components/UserDashboard')); 
 
 // Protected Route Component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -24,6 +26,14 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return <Navigate to="/login" replace />;
   }
   return <>{children}</>;
+};
+
+// مكون ذكي للصفحة الرئيسية
+const SmartHome = () => {
+  if (authService.isAuthenticated()) {
+    return <UserDashboard />;
+  }
+  return <Home />;
 };
 
 // Socket Manager Component
@@ -50,10 +60,13 @@ const App = () => {
           <ToastProvider>
             <ChatProvider>
               <SocketManager />
-            {/* استخدام Suspense لعرض مؤشر تحميل أثناء جلب المكون */}
+              
+
             <Suspense fallback={<Loading />}>
               <Routes>
-                <Route path="/" element={<Home />} />
+                
+                <Route path="/" element={<SmartHome />} />
+
                 <Route
                   path="/chat"
                   element={
@@ -62,14 +75,16 @@ const App = () => {
                     </ProtectedRoute>
                   }
                 />
+                
                 <Route
                   path="/dashboard"
                   element={
                     <ProtectedRoute>
-                      <Dashboard />
+                      <UserDashboard />
                     </ProtectedRoute>
                   }
                 />
+                
                 <Route
                   path="/account"
                   element={

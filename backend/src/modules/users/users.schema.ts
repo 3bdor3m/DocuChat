@@ -13,7 +13,7 @@ export const UpdateProfileSchema = z.object({
 // قواعد تحديث الصورة الشخصية
 export const UpdateProfileImageSchema = z.object({
   body: z.object({
-    imageUrl: z.string().url('رابط الصورة غير صالح'),
+    image: z.string().url('رابط الصورة غير صالح'),
   }),
 });
 

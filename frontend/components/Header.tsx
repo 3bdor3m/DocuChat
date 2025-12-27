@@ -104,9 +104,19 @@ export const Header = () => {
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                   className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#2873ec]/10 hover:bg-[#2873ec]/20 border border-[#2873ec]/30 transition-all duration-300"
                 >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#2873ec] to-[#4a8fff] flex items-center justify-center text-sm font-bold">
-                    {user.firstName?.charAt(0).toUpperCase() || user.fullName?.charAt(0).toUpperCase()}
-                  </div>
+                  {/* 🔥🔥🔥 التعديل هنا: عرض الصورة إذا وجدت، وإلا عرض الحرف الأول 🔥🔥🔥 */}
+                  {user.profileImage ? (
+                    <img 
+                      src={user.profileImage} 
+                      alt="Profile" 
+                      className="w-8 h-8 rounded-full object-cover border border-white/10"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#2873ec] to-[#4a8fff] flex items-center justify-center text-sm font-bold">
+                      {user.firstName?.charAt(0).toUpperCase() || user.fullName?.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+
                   <span className="text-white font-medium max-w-[100px] truncate">
                     {user.firstName || user.fullName?.split(' ')[0]}
                   </span>
